@@ -1,12 +1,12 @@
-name: Build LineageOS 23 Kernel + ReSukiSU
+name: Build LineageOS Kernel - Kiev (Variant 2) + ReSukiSU
 
 on:
   workflow_dispatch:
 
 env:
   KERNEL_REPO: https://github.com/LineageOS/android_kernel_motorola_sm7250
-  KERNEL_BRANCH: lineage-21.0 # Note: kiev utilise généralement la branche sm7250 (Snapdragon 750G/765G)
-  KERNEL_DEFCONFIG: kiev_defconfig
+  KERNEL_BRANCH: lineage-21.0 # Branche officielle entièrement stable et fusionnée pour kiev
+  KERNEL_DEFCONFIG: vendor/kiev_defconfig
   ANYKERNEL_REPO: https://github.com/osm0sis/AnyKernel3
 
 jobs:
@@ -22,32 +22,31 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc build-essential flex bison libssl-dev libelf-dev git curl zip cpio
 
-      - name: Cloner le Kernel officiel LineageOS
+      - name: Cloner le Kernel LineageOS officiel pour Kiev
         run: |
           git clone --depth=1 ${{ env.KERNEL_REPO }} -b ${{ env.KERNEL_BRANCH }} kernel-source
 
-      - name: Télécharger Clang AOSP & GCC (Outils officiels Google)
+      - name: Télécharger les compilateurs officiels Google (Clang + GCC)
         run: |
           mkdir -p $GITHUB_WORKSPACE/toolchains
           cd $GITHUB_WORKSPACE/toolchains
           
-          # Clang AOSP stable pour noyau 4.19
+          # Clang AOSP stable
           mkdir clang
           wget -q https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android12-release/clang-r416183b.tar.gz
           tar -xf clang-r416183b.tar.gz -C clang
           
-          # GCC 64 pour l'assemblage
+          # GCC 4.9 pour l'assemblage arm64
           mkdir gcc64
           wget -q https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/heads/android12-release.tar.gz
           tar -xf android12-release.tar.gz -C gcc64
 
-      - name: Intégrer ReSukiSU / KernelSU
+      - name: Injecter ReSukiSU / KernelSU
         run: |
           cd $GITHUB_WORKSPACE/kernel-source
-          # Injection du code source de KernelSU/ReSukiSU dans l'arbre LineageOS
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
 
-      - name: Compilation du Noyau LineageOS
+      - name: Compilation du Noyau
         run: |
           cd $GITHUB_WORKSPACE/kernel-source
           
@@ -55,31 +54,30 @@ jobs:
           export SUBARCH=arm64
           export PATH="$GITHUB_WORKSPACE/toolchains/clang/bin:$GITHUB_WORKSPACE/toolchains/gcc64/bin:$PATH"
           
-          # 1. Génération de la configuration propre de LineageOS
+          # 1. Configuration initiale avec le defconfig kiev
           make O=out ARCH=arm64 ${{ env.KERNEL_DEFCONFIG }}
           
-          # 2. Forcer l'activation des Kprobes pour ReSukiSU
+          # 2. Forcer les Kprobes pour le support invisible de ReSukiSU
           ./scripts/config --file out/.config --enable CONFIG_KPROBES
           ./scripts/config --file out/.config --enable CONFIG_HAVE_KPROBES
           ./scripts/config --file out/.config --enable CONFIG_KPROBE_EVENTS
           
-          # 3. Contournement du bug DTC Hisilicon (juste au cas où)
+          # 3. Éviter le fameux bug DTC sur Hisilicon si présent
           sed -i 's/dts += hisilicon/# dts += hisilicon/g' arch/arm64/boot/dts/Makefile || true
           mkdir -p arch/arm64/boot/dts/hisilicon && echo "" > arch/arm64/boot/dts/hisilicon/Makefile
           
-          # 4. Build à pleine puissance
+          # 4. Build
           make -j$(nproc) O=out \
             ARCH=arm64 \
             CC=clang \
             CROSS_COMPILE=aarch64-linux-android- \
             CLANG_TRIPLE=aarch64-linux-gnu-
 
-      - name: Empaqueter le ZIP Flashable (AnyKernel3)
+      - name: Empaqueter le noyau avec AnyKernel3
         run: |
           cd $GITHUB_WORKSPACE
           git clone --depth=1 ${{ env.ANYKERNEL_REPO }} AnyKernel3
           
-          # Vérification et copie du fichier compilé
           if [ -f kernel-source/out/arch/arm64/boot/Image.gz-dtb ]; then
             cp kernel-source/out/arch/arm64/boot/Image.gz-dtb AnyKernel3/Image.gz-dtb
           elif [ -f kernel-source/out/arch/arm64/boot/Image.gz ]; then
@@ -88,10 +86,10 @@ jobs:
           
           cd AnyKernel3
           sed -i 's/do.devicecheck=1/do.devicecheck=0/g' anykernel.sh
-          zip -r9 ../Kernel-LineageOS23-Kiev-Rooted.zip * -x .git README.md
+          zip -r9 ../Kernel-Kiev-Variant2-Rooted.zip * -x .git README.md
 
-      - name: Téléverser le livrable sur GitHub
+      - name: Téléverser le fichier .ZIP final
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-Kiev-LineageOS23
-          path: Kernel-LineageOS23-Kiev-Rooted.zip
+          name: Kernel-Kiev-Variant2-LineageOS
+          path: Kernel-Kiev-Variant2-Rooted.zip
