@@ -4,7 +4,8 @@ on:
   workflow_dispatch:
 
 env:
-  KERNEL_REPO: https://github.com/LineageOS/android_kernel_motorola_sm8250
+  # Format {owner}/{repo} corrigé ici
+  KERNEL_REPO: LineageOS/android_kernel_motorola_sm8250
   KERNEL_BRANCH: lineage-23.2
   KERNEL_DEFCONFIG: vendor/kona-perf_defconfig
   ANYKERNEL_REPO: https://github.com/osm0sis/AnyKernel3
@@ -23,15 +24,19 @@ jobs:
       - name: Setup Build Environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y git flex bison gperf build-essential libncurses5-dev libssl-dev bc libc6-dev-i386 lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z-dev libgl1-mesa-dev libxml2-utils xsltproc unzip
+          # Installation des outils de base et de Clang/LLVM pour la compilation Android
+          sudo apt-get install -y git flex bison build-essential libssl-dev bc clang lld llvm
 
       - name: Build Kernel
         run: |
           cd kernel-source
           export ARCH=arm64
-          export CROSS_COMPILE=aarch64-linux-gnu-
+          export SUBARCH=arm64
+          # Utilisation de Clang comme compilateur pour éviter les erreurs de syntaxe
+          export CC=clang
+          
           make ${{ env.KERNEL_DEFCONFIG }}
-          make -j$(nproc)
+          make -j$(nproc) CC=clang CLANG_TRIPLE=aarch64-linux-gnu-
 
       - name: Package Kernel
         run: |
