@@ -39,13 +39,12 @@ jobs:
         run: |
           cd kernel-source
           
-          # Nettoyage profond
+          # Nettoyage
           make clean
           make mrproper
           
           echo "CONFIG_KSU=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
           
-          # Variables globales nécessaires pour le build
           export ARCH=arm64
           export SUBARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
@@ -53,14 +52,18 @@ jobs:
           # 1. Configuration
           make ${{ env.KERNEL_DEFCONFIG }}
           
-          # 2. Compilation des outils (HOSTCC/HOSTLD forcés, PATH sans Proton-Clang)
-          make scripts HOSTCC=gcc HOSTLD=ld
+          # 2. Remplacement temporaire du linker pour éviter les conflits
+          # On déplace le ld de Proton-Clang pour que le Makefile utilise /usr/bin/ld
+          mv /opt/proton-clang-master/bin/ld /opt/proton-clang-master/bin/ld.real
           
-          # 3. Compilation finale (Isolation par sous-shell pour charger Proton-Clang uniquement ici)
-          (
-            export PATH=/opt/proton-clang-master/bin:$PATH
-            make -j$(nproc) CC=clang LD=ld.lld LLVM=1 LLVM_IAS=1 KCFLAGS="-w"
-          )
+          make scripts HOSTCC=gcc
+          
+          # 3. Remise en place du linker pour le build du noyau
+          mv /opt/proton-clang-master/bin/ld.real /opt/proton-clang-master/bin/ld
+          
+          # 4. Compilation finale
+          export PATH=/opt/proton-clang-master/bin:$PATH
+          make -j$(nproc) CC=clang LD=ld.lld LLVM=1 LLVM_IAS=1 KCFLAGS="-w"
 
       - name: Package Kernel
         run: |
