@@ -1,0 +1,57 @@
+name: Build Motorola kiev - LineageOS 23 (Android 16)
+
+on:
+  workflow_dispatch: # Permet de lancer le build manuellement d'un clic
+
+jobs:
+  build-kernel:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout du code source
+        uses: actions/checkout@v4
+
+      - name: Installer les outils de base Linux
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc build-essential flex bison libssl-dev libelf-dev crossbuild-essential-arm64 git
+
+      - name: Télécharger le compilateur Clang officiel de Google (AOSP)
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/clang
+          cd $GITHUB_WORKSPACE/clang
+          # Téléchargement de la version Clang utilisée pour les branches Android récentes
+          wget https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r522817.tar.gz
+          tar -xf clang-r522817.tar.gz
+          echo "$GITHUB_WORKSPACE/clang/bin" >> $GITHUB_PATH
+
+      - name: Configurer les variables d'environnement (Android 16)
+        run: |
+          echo "ARCH=arm64" >> $GITHUB_ENV
+          echo "SUBARCH=arm64" >> $GITHUB_ENV
+          echo "HEADER_ARCH=arm64" >> $GITHUB_ENV
+          echo "CC=clang" >> $GITHUB_ENV
+          echo "CLANG_TRIPLE=aarch64-linux-gnu-" >> $GITHUB_ENV
+          echo "CROSS_COMPILE=aarch64-linux-gnu-" >> $GITHUB_ENV
+
+      - name: Générer le fichier de configuration (defconfig)
+        run: |
+          make kiev_defconfig
+
+      - name: Patch de contournement pour Hisilicon (Évite le bug DTC)
+        run: |
+          sed -i 's/dts += hisilicon/# dts += hisilicon/g' arch/arm64/boot/dts/Makefile || true
+          mkdir -p arch/arm64/boot/dts/hisilicon
+          echo "" > arch/arm64/boot/dts/hisilicon/Makefile
+
+      - name: Lancer la compilation du Kernel (Multi-cœurs)
+        run: |
+          make -j$(nproc)
+
+      - name: Sauvegarder l'image du noyau (Artifacts)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kernel-LineageOS23-Kiev
+          path: |
+            arch/arm64/boot/Image.gz
+            arch/arm64/boot/dtbo.img
