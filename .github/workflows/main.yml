@@ -4,7 +4,6 @@ on:
   workflow_dispatch:
 
 env:
-  # Format {owner}/{repo} corrigé ici
   KERNEL_REPO: LineageOS/android_kernel_motorola_sm8250
   KERNEL_BRANCH: lineage-23.2
   KERNEL_DEFCONFIG: vendor/kona-perf_defconfig
@@ -24,19 +23,34 @@ jobs:
       - name: Setup Build Environment
         run: |
           sudo apt-get update
-          # Installation des outils de base et de Clang/LLVM pour la compilation Android
-          sudo apt-get install -y git flex bison build-essential libssl-dev bc clang lld llvm
+          # Ajout de 'gawk' pour la commande grep -P (Perl-regex) et 'coreutils' pour realpath
+          sudo apt-get install -y git flex bison build-essential libssl-dev bc clang lld llvm binutils-aarch64-linux-gnu gawk
+
+      - name: Patch ReSukiSU
+        run: |
+          cd kernel-source
+          # On télécharge le script
+          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" > setup.sh
+          # On le rend exécutable
+          chmod +x setup.sh
+          # On l'exécute
+          ./setup.sh
 
       - name: Build Kernel
         run: |
           cd kernel-source
           export ARCH=arm64
           export SUBARCH=arm64
-          # Utilisation de Clang comme compilateur pour éviter les erreurs de syntaxe
           export CC=clang
+          export CLANG_TRIPLE=aarch64-linux-gnu-
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          
+          # IMPORTANT : Il faut activer CONFIG_KSU dans ton fichier defconfig 
+          # si ce n'est pas déjà fait par le script setup.sh
+          echo "CONFIG_KSU=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
           
           make ${{ env.KERNEL_DEFCONFIG }}
-          make -j$(nproc) CC=clang CLANG_TRIPLE=aarch64-linux-gnu-
+          make -j$(nproc) CC=clang CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-gnu-
 
       - name: Package Kernel
         run: |
@@ -46,5 +60,5 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-Output
+          name: Kernel-ReSukiSU-Output
           path: AnyKernel3/*
