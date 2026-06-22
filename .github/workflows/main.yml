@@ -39,29 +39,36 @@ jobs:
       - name: Build Kernel
         run: |
           cd kernel-source
+          # Préparation des variables d'environnement
           export ARCH=arm64
           export SUBARCH=arm64
           export PATH=/opt/proton-clang-master/bin:$PATH
           
-          # Cross-compilation (Cible ARM64)
+          # Variables pour la cross-compilation (Cible ARM64)
           export CC=clang
           export LD=ld.lld
           export CLANG_TRIPLE=aarch64-linux-gnu-
           export CROSS_COMPILE=aarch64-linux-gnu-
           
-          # Outils hôtes (Serveur x86_64) - Forcer le linker natif
+          # Variables pour les outils hôtes (Serveur x86_64)
           export HOSTCC=gcc
           export HOSTLD=ld
-          export HOSTLDFLAGS="-fuse-ld=bfd"
           
+          # Nettoyage profond
           make clean
           make mrproper
           
+          # Activation de KernelSU
           echo "CONFIG_KSU=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
           
-          # Compilation avec forçage du linker hôte
-          make ${{ env.KERNEL_DEFCONFIG }} CC=clang LD=ld.lld LLVM=1 LLVM_IAS=1 HOSTCC=gcc HOSTLD=ld HOSTLDFLAGS="-fuse-ld=bfd"
-          make -j$(nproc) CC=clang LD=ld.lld LLVM=1 LLVM_IAS=1 HOSTCC=gcc HOSTLD=ld HOSTLDFLAGS="-fuse-ld=bfd" KCFLAGS="-w"
+          # 1. Configuration initiale
+          make ${{ env.KERNEL_DEFCONFIG }} CC=clang LD=ld.lld LLVM=1 LLVM_IAS=1 HOSTCC=gcc
+          
+          # 2. Compilation isolée des outils hôtes
+          make scripts HOSTCC=gcc
+          
+          # 3. Compilation finale du noyau
+          make -j$(nproc) CC=clang LD=ld.lld LLVM=1 LLVM_IAS=1 HOSTCC=gcc KCFLAGS="-w"
 
       - name: Package Kernel
         run: |
