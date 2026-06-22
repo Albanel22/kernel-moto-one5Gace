@@ -9,6 +9,8 @@ env:
   KERNEL_DEFCONFIG: vendor/kona-perf_defconfig
   ANYKERNEL_REPO: https://github.com/osm0sis/AnyKernel3
   RESUKISU_PATCH_URL: https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh
+  # Toolchain AOSP Clang stable pour SM8250
+  TOOLCHAIN_URL: https://github.com/kdrag0n/proton-clang/archive/refs/heads/master.tar.gz
 
 jobs:
   build:
@@ -24,7 +26,10 @@ jobs:
       - name: Setup Build Environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y git flex bison build-essential libssl-dev bc clang lld llvm binutils-aarch64-linux-gnu gcc-aarch64-linux-gnu gawk
+          sudo apt-get install -y git flex bison build-essential libssl-dev bc binutils-aarch64-linux-gnu gawk
+          # Téléchargement de la toolchain Proton-Clang
+          curl -LSs "${{ env.TOOLCHAIN_URL }}" | tar -xz -C /opt
+          echo "PATH=/opt/proton-clang-master/bin:$PATH" >> $GITHUB_ENV
 
       - name: Patch ReSukiSU
         run: |
@@ -42,19 +47,12 @@ jobs:
           export CLANG_TRIPLE=aarch64-linux-gnu-
           export CROSS_COMPILE=aarch64-linux-gnu-
           
-          # Nettoyage profond pour éviter les erreurs d'archivage (AR)
-          make clean
-          make mrproper
-          
-          # Activation de KernelSU
+          make clean && make mrproper
           echo "CONFIG_KSU=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
           
-          # Configuration du noyau
+          # Compilation avec la Toolchain externe (Proton-Clang)
           make ${{ env.KERNEL_DEFCONFIG }} CC=clang LLVM=1 LLVM_IAS=1
-          
-          # Compilation avec parallélisme contrôlé (-j2) pour économiser la RAM
-          # et ajout de -I pour corriger les erreurs d'include
-          make -j2 CC=clang LLVM=1 LLVM_IAS=1 KCFLAGS="-w -I$(pwd)/drivers/clk/qcom"
+          make -j$(nproc) CC=clang LLVM=1 LLVM_IAS=1 KCFLAGS="-w"
 
       - name: Package Kernel
         run: |
