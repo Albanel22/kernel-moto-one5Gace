@@ -38,25 +38,24 @@ jobs:
       - name: Build Kernel
         run: |
           cd kernel-source
-          export ARCH=arm64
-          export SUBARCH=arm64
           
-          # 1. Nettoyage
+          # Nettoyage
           make clean
           make mrproper
           
           echo "CONFIG_KSU=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
           
-          # 2. CONFIGURATION & SCRIPTS (Environnement système propre)
-          # On n'ajoute PAS Proton-Clang au PATH ici.
-          # Le système utilisera gcc et ld natifs d'Ubuntu.
-          make ${{ env.KERNEL_DEFCONFIG }}
-          make scripts HOSTCC=gcc HOSTLD=ld
+          # 1. Configuration (Utilise la config spécifique)
+          make ARCH=arm64 ${{ env.KERNEL_DEFCONFIG }}
           
-          # 3. COMPILATION DU NOYAU (On active Proton-Clang)
-          # On définit le PATH uniquement pour cette étape
+          # 2. Compilation des scripts hôtes (La partie critique)
+          # On force ARCH et CROSS_COMPILE à vide pour que GCC ne se prenne pas pour un compilateur ARM
+          make ARCH= CROSS_COMPILE= scripts HOSTCC=gcc HOSTLD=ld
+          
+          # 3. Compilation finale du noyau
+          # On réactive tout avec le PATH vers Proton-Clang
           export PATH=/opt/proton-clang-master/bin:$PATH
-          make -j$(nproc) CC=clang LD=ld.lld LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- KCFLAGS="-w"
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=clang LD=ld.lld LLVM=1 LLVM_IAS=1 -j$(nproc) KCFLAGS="-w"
 
       - name: Package Kernel
         run: |
