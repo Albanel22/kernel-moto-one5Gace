@@ -41,23 +41,30 @@ jobs:
           cd kernel-source
           export ARCH=arm64
           export SUBARCH=arm64
-          export PATH=/opt/proton-clang-master/bin:$PATH
           
           # Nettoyage profond
           make clean
           make mrproper
           
-          # Modification directe des Makefile pour forcer gcc/ld natifs
-          # Cela empêche LLVM de tenter de linker les outils hôtes
-          sed -i 's/HOSTCC.*=.*/HOSTCC = gcc/' scripts/Makefile.host
-          sed -i 's/HOSTLD.*=.*/HOSTLD = ld/' scripts/Makefile.host
-          
           # Activation de KernelSU
           echo "CONFIG_KSU=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
           
-          # Configuration et compilation finale
-          make ${{ env.KERNEL_DEFCONFIG }} CC=clang LLVM=1 LLVM_IAS=1
-          make -j$(nproc) CC=clang LLVM=1 LLVM_IAS=1 KCFLAGS="-w"
+          # 1. Configuration initiale
+          make ${{ env.KERNEL_DEFCONFIG }}
+          
+          # 2. Le "Hack" ultime : déplacer temporairement le linker LLVM 
+          # pour forcer l'usage du 'ld' système (Ubuntu) lors de la création des scripts
+          mv /opt/proton-clang-master/bin/ld /opt/proton-clang-master/bin/ld.bak
+          
+          # Compilation des scripts avec le linker natif
+          make scripts HOSTCC=gcc
+          
+          # Remise en place du linker LLVM pour la compilation du noyau
+          mv /opt/proton-clang-master/bin/ld.bak /opt/proton-clang-master/bin/ld
+          
+          # 3. Compilation finale du noyau AVEC Proton-Clang
+          export PATH=/opt/proton-clang-master/bin:$PATH
+          make -j$(nproc) CC=clang LD=ld.lld LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- KCFLAGS="-w"
 
       - name: Package Kernel
         run: |
