@@ -1,15 +1,9 @@
-name: Build Kernel
+name: Build ReSukiSU Kernel
 
 on:
+  push:
+    branches: [ main ]
   workflow_dispatch:
-
-env:
-  KERNEL_REPO: LineageOS/android_kernel_motorola_sm8250
-  KERNEL_BRANCH: lineage-23.2
-  KERNEL_DEFCONFIG: vendor/kona-perf_defconfig
-  ANYKERNEL_REPO: https://github.com/osm0sis/AnyKernel3
-  RESUKISU_PATCH_URL: https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh
-  TOOLCHAIN_URL: https://github.com/kdrag0n/proton-clang/archive/refs/heads/master.tar.gz
 
 jobs:
   build:
@@ -17,56 +11,47 @@ jobs:
     steps:
       - name: Checkout Kernel Source
         uses: actions/checkout@v4
-        with:
-          repository: ${{ env.KERNEL_REPO }}
-          ref: ${{ env.KERNEL_BRANCH }}
-          path: kernel-source
 
-      - name: Setup Build Environment
+      - name: Setup Environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y git flex bison build-essential libssl-dev bc binutils-aarch64-linux-gnu gcc-aarch64-linux-gnu gawk
-          curl -LSs "${{ env.TOOLCHAIN_URL }}" | tar -xz -C /opt
+          sudo apt-get install -y bc bison build-essential ccache curl flex g++-aarch64-linux-gnu gcc-aarch64-linux-gnu git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev
 
-      - name: Patch ReSukiSU
+      - name: Setup Proton-Clang
         run: |
-          cd kernel-source
-          curl -LSs "${{ env.RESUKISU_PATCH_URL }}" > setup.sh
-          chmod +x setup.sh
-          ./setup.sh
+          git clone --depth=1 https://github.com/kdrag0n/proton-clang /opt/proton-clang-master
 
-      - name: Build Kernel
+      - name: Patch & Build Kernel
         run: |
-          cd kernel-source
+          # 1. Nettoyage initial
+          make clean && make mrproper
           
-          # Nettoyage
-          make clean
-          make mrproper
+          # 2. Application du patch ReSukiSU 
+          # Remplace cette ligne par la commande réelle de ton script de patch
+          # Exemple: bash scripts/setup_resukisu.sh
           
-          echo "CONFIG_KSU=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
-          
-          export ARCH=arm64
-          export SUBARCH=arm64
-          export CROSS_COMPILE=aarch64-linux-gnu-
-          
-          # 1. Configuration
+          # 3. Génération de la configuration (Kona)
           make ARCH=arm64 ${{ env.KERNEL_DEFCONFIG }}
           
-          # 2. Utilisation des chemins absolus pour garantir l'usage des outils hôtes natifs
-          # Cela court-circuite le PATH et empêche l'utilisation de clang pour les scripts
-          make ARCH=arm64 scripts HOSTCC=/usr/bin/gcc HOSTLD=/usr/bin/ld
+          # 4. Désactivation des options conflictuelles (LTO/CFI/Shadow)
+          scripts/config --disable LTO
+          scripts/config --disable CFI_CLANG
+          scripts/config --disable SHADOW_CALL_STACK
           
-          # 3. Compilation finale du noyau (Injection de Proton-Clang ici seulement)
+          # 5. Activation de ReSukiSU
+          echo "CONFIG_KSU=y" >> .config
+          
+          # 6. Lancer la compilation
           export PATH=/opt/proton-clang-master/bin:$PATH
-          make -j$(nproc) ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=clang LD=ld.lld LLVM=1 LLVM_IAS=1 KCFLAGS="-w"
+          make -j$(nproc) ARCH=arm64 \
+          CC=clang \
+          LD=ld.lld \
+          LLVM=1 \
+          LLVM_IAS=1 \
+          CROSS_COMPILE=aarch64-linux-gnu-
 
-      - name: Package Kernel
-        run: |
-          git clone ${{ env.ANYKERNEL_REPO }} AnyKernel3
-          cp kernel-source/arch/arm64/boot/Image.gz-dtb AnyKernel3/
-          
-      - name: Upload Artifacts
+      - name: Upload Image
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-ReSukiSU-Output
-          path: AnyKernel3/*
+          name: Kernel-Image
+          path: out/arch/arm64/boot/Image.gz-dtb
