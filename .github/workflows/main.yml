@@ -42,12 +42,15 @@ jobs:
           export CLANG_TRIPLE=aarch64-linux-gnu-
           export CROSS_COMPILE=aarch64-linux-gnu-
           
-          # Activation de KernelSU dans la configuration
+          # Activation de KernelSU
           echo "CONFIG_KSU=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
           
-          make ${{ env.KERNEL_DEFCONFIG }} CC=clang CLANG_TRIPLE=aarch64-linux-gnu-
-          # Compilation avec -j1 pour éviter les erreurs de build sur techpack/display
-          make -j1 CC=clang CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-gnu-
+          # Configuration du noyau
+          make ${{ env.KERNEL_DEFCONFIG }} CC=clang LLVM=1 LLVM_IAS=1
+          
+          # Compilation avec les flags de correction pour les includes de traces
+          # -I$(pwd)/drivers/clk/qcom ajoute le dossier des drivers clk aux chemins de recherche
+          make -j$(nproc) CC=clang LLVM=1 LLVM_IAS=1 KCFLAGS="-w -I$(pwd)/drivers/clk/qcom"
 
       - name: Package Kernel
         run: |
