@@ -26,21 +26,20 @@ jobs:
 
       - name: Build Kernel
         run: |
-          # 1. Nettoyage profond pour éviter les résidus de précédentes erreurs
-          make clean && make mrproper
+          # 1. Inspecter le contenu du dossier actuel
+          echo "Contenu du dossier actuel :"
+          ls -F
           
-          # 2. Utilisation de la configuration performance validée
-          make ARCH=arm64 vendor/kona-perf_defconfig
+          # 2. Si le Makefile n'est pas ici, on cherche dans les sous-dossiers
+          echo "Recherche du Makefile :"
+          find . -name Makefile
           
-          # 3. Compilation avec le support KernelSU activé directement
-          export PATH=/opt/proton-clang/bin:$PATH
-          make -j$(nproc) ARCH=arm64 \
-            CC=clang \
-            LD=ld.lld \
-            LLVM=1 \
-            LLVM_IAS=1 \
-            CROSS_COMPILE=aarch64-linux-gnu- \
-            CONFIG_KSU=y
+          # ATTENTION : Une fois que tu auras trouvé où est le Makefile, 
+          # tu devras ajouter 'cd nom_du_dossier' ici.
+          
+          # Pour l'instant, on laisse le reste en commentaire
+          # make clean && make mrproper
+
 
       - name: Upload Kernel Image
         uses: actions/upload-artifact@v4
