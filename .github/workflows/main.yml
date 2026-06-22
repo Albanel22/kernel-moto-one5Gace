@@ -5,6 +5,12 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+env:
+  # Remplace avec le nom exact de ton fichier defconfig (ex: vendor/kona-perf_defconfig)
+  KERNEL_DEFCONFIG: vendor/kona-perf_defconfig 
+  # URL du compilateur (Proton-Clang est le standard pour Kona)
+  CLANG_URL: https://github.com/kdrag0n/proton-clang
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -12,28 +18,35 @@ jobs:
       - name: Checkout Kernel Source
         uses: actions/checkout@v4
 
-      - name: Setup Environment
+      - name: Setup Build Environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc bison build-essential ccache curl flex g++-aarch64-linux-gnu gcc-aarch64-linux-gnu git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev
+          sudo apt-get install -y \
+            bc bison build-essential ccache curl flex g++-aarch64-linux-gnu \
+            gcc-aarch64-linux-gnu git gnupg gperf imagemagick libelf-dev \
+            liblz4-tool libncurses-dev libssl-dev libxml2 libxml2-utils \
+            lzop pngcrush rsync schedtool squashfs-tools xsltproc zip \
+            zlib1g-dev libc6-dev-i386 lib32ncurses-dev
 
-      - name: Setup Proton-Clang
+      - name: Setup Toolchain
         run: |
-          git clone --depth=1 https://github.com/kdrag0n/proton-clang /opt/proton-clang-master
+          git clone --depth=1 ${{ env.CLANG_URL }} /opt/proton-clang-master
 
-      - name: Patch & Build Kernel
+      - name: Build Kernel
         run: |
-          # 1. Nettoyage initial
+          cd kernel-source
+          
+          # 1. Nettoyage profond
           make clean && make mrproper
           
-          # 2. Application du patch ReSukiSU 
-          # Remplace cette ligne par la commande réelle de ton script de patch
-          # Exemple: bash scripts/setup_resukisu.sh
+          # 2. Application de ReSukiSU (Ajoute ici ta méthode de patch)
+          # Exemple : bash scripts/setup_resukisu.sh
           
-          # 3. Génération de la configuration (Kona)
+          # 3. Génération de la configuration initiale
           make ARCH=arm64 ${{ env.KERNEL_DEFCONFIG }}
           
-          # 4. Désactivation des options conflictuelles (LTO/CFI/Shadow)
+          # 4. Désactivation des options bloquantes (LTO/CFI/SCS)
+          # Ces options causent souvent l'erreur "linker command failed"
           scripts/config --disable LTO
           scripts/config --disable CFI_CLANG
           scripts/config --disable SHADOW_CALL_STACK
@@ -41,7 +54,7 @@ jobs:
           # 5. Activation de ReSukiSU
           echo "CONFIG_KSU=y" >> .config
           
-          # 6. Lancer la compilation
+          # 6. Compilation
           export PATH=/opt/proton-clang-master/bin:$PATH
           make -j$(nproc) ARCH=arm64 \
           CC=clang \
@@ -50,7 +63,7 @@ jobs:
           LLVM_IAS=1 \
           CROSS_COMPILE=aarch64-linux-gnu-
 
-      - name: Upload Image
+      - name: Upload Kernel Image
         uses: actions/upload-artifact@v4
         with:
           name: Kernel-Image
