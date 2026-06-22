@@ -50,20 +50,15 @@ jobs:
           export CROSS_COMPILE=aarch64-linux-gnu-
           
           # 1. Configuration
-          make ${{ env.KERNEL_DEFCONFIG }}
+          make ARCH=arm64 ${{ env.KERNEL_DEFCONFIG }}
           
-          # 2. Remplacement temporaire du linker pour éviter les conflits
-          # On déplace le ld de Proton-Clang pour que le Makefile utilise /usr/bin/ld
-          mv /opt/proton-clang-master/bin/ld /opt/proton-clang-master/bin/ld.real
+          # 2. Utilisation des chemins absolus pour garantir l'usage des outils hôtes natifs
+          # Cela court-circuite le PATH et empêche l'utilisation de clang pour les scripts
+          make ARCH=arm64 scripts HOSTCC=/usr/bin/gcc HOSTLD=/usr/bin/ld
           
-          make scripts HOSTCC=gcc
-          
-          # 3. Remise en place du linker pour le build du noyau
-          mv /opt/proton-clang-master/bin/ld.real /opt/proton-clang-master/bin/ld
-          
-          # 4. Compilation finale
+          # 3. Compilation finale du noyau (Injection de Proton-Clang ici seulement)
           export PATH=/opt/proton-clang-master/bin:$PATH
-          make -j$(nproc) CC=clang LD=ld.lld LLVM=1 LLVM_IAS=1 KCFLAGS="-w"
+          make -j$(nproc) ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=clang LD=ld.lld LLVM=1 LLVM_IAS=1 KCFLAGS="-w"
 
       - name: Package Kernel
         run: |
