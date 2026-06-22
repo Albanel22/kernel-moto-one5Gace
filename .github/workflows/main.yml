@@ -1,57 +1,97 @@
-name: Build Motorola kiev - LineageOS 23 (Android 16)
+name: Build LineageOS 23 Kernel + ReSukiSU
 
 on:
-  workflow_dispatch: # Permet de lancer le build manuellement d'un clic
+  workflow_dispatch:
+
+env:
+  KERNEL_REPO: https://github.com/LineageOS/android_kernel_motorola_sm7250
+  KERNEL_BRANCH: lineage-21.0 # Note: kiev utilise généralement la branche sm7250 (Snapdragon 750G/765G)
+  KERNEL_DEFCONFIG: kiev_defconfig
+  ANYKERNEL_REPO: https://github.com/osm0sis/AnyKernel3
 
 jobs:
-  build-kernel:
+  build:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout du code source
-        uses: actions/checkout@v4
+      - name: Nettoyer l'espace de travail
+        run: rm -rf *
 
-      - name: Installer les outils de base Linux
+      - name: Installer les dépendances Linux
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential flex bison libssl-dev libelf-dev crossbuild-essential-arm64 git
+          sudo apt-get install -y bc build-essential flex bison libssl-dev libelf-dev git curl zip cpio
 
-      - name: Télécharger le compilateur Clang officiel de Google (AOSP)
+      - name: Cloner le Kernel officiel LineageOS
         run: |
-          mkdir -p $GITHUB_WORKSPACE/clang
-          cd $GITHUB_WORKSPACE/clang
-          # Téléchargement de la version Clang utilisée pour les branches Android récentes
-          wget https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r522817.tar.gz
-          tar -xf clang-r522817.tar.gz
-          echo "$GITHUB_WORKSPACE/clang/bin" >> $GITHUB_PATH
+          git clone --depth=1 ${{ env.KERNEL_REPO }} -b ${{ env.KERNEL_BRANCH }} kernel-source
 
-      - name: Configurer les variables d'environnement (Android 16)
+      - name: Télécharger Clang AOSP & GCC (Outils officiels Google)
         run: |
-          echo "ARCH=arm64" >> $GITHUB_ENV
-          echo "SUBARCH=arm64" >> $GITHUB_ENV
-          echo "HEADER_ARCH=arm64" >> $GITHUB_ENV
-          echo "CC=clang" >> $GITHUB_ENV
-          echo "CLANG_TRIPLE=aarch64-linux-gnu-" >> $GITHUB_ENV
-          echo "CROSS_COMPILE=aarch64-linux-gnu-" >> $GITHUB_ENV
+          mkdir -p $GITHUB_WORKSPACE/toolchains
+          cd $GITHUB_WORKSPACE/toolchains
+          
+          # Clang AOSP stable pour noyau 4.19
+          mkdir clang
+          wget -q https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android12-release/clang-r416183b.tar.gz
+          tar -xf clang-r416183b.tar.gz -C clang
+          
+          # GCC 64 pour l'assemblage
+          mkdir gcc64
+          wget -q https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/heads/android12-release.tar.gz
+          tar -xf android12-release.tar.gz -C gcc64
 
-      - name: Générer le fichier de configuration (defconfig)
+      - name: Intégrer ReSukiSU / KernelSU
         run: |
-          make kiev_defconfig
+          cd $GITHUB_WORKSPACE/kernel-source
+          # Injection du code source de KernelSU/ReSukiSU dans l'arbre LineageOS
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
 
-      - name: Patch de contournement pour Hisilicon (Évite le bug DTC)
+      - name: Compilation du Noyau LineageOS
         run: |
+          cd $GITHUB_WORKSPACE/kernel-source
+          
+          export ARCH=arm64
+          export SUBARCH=arm64
+          export PATH="$GITHUB_WORKSPACE/toolchains/clang/bin:$GITHUB_WORKSPACE/toolchains/gcc64/bin:$PATH"
+          
+          # 1. Génération de la configuration propre de LineageOS
+          make O=out ARCH=arm64 ${{ env.KERNEL_DEFCONFIG }}
+          
+          # 2. Forcer l'activation des Kprobes pour ReSukiSU
+          ./scripts/config --file out/.config --enable CONFIG_KPROBES
+          ./scripts/config --file out/.config --enable CONFIG_HAVE_KPROBES
+          ./scripts/config --file out/.config --enable CONFIG_KPROBE_EVENTS
+          
+          # 3. Contournement du bug DTC Hisilicon (juste au cas où)
           sed -i 's/dts += hisilicon/# dts += hisilicon/g' arch/arm64/boot/dts/Makefile || true
-          mkdir -p arch/arm64/boot/dts/hisilicon
-          echo "" > arch/arm64/boot/dts/hisilicon/Makefile
+          mkdir -p arch/arm64/boot/dts/hisilicon && echo "" > arch/arm64/boot/dts/hisilicon/Makefile
+          
+          # 4. Build à pleine puissance
+          make -j$(nproc) O=out \
+            ARCH=arm64 \
+            CC=clang \
+            CROSS_COMPILE=aarch64-linux-android- \
+            CLANG_TRIPLE=aarch64-linux-gnu-
 
-      - name: Lancer la compilation du Kernel (Multi-cœurs)
+      - name: Empaqueter le ZIP Flashable (AnyKernel3)
         run: |
-          make -j$(nproc)
+          cd $GITHUB_WORKSPACE
+          git clone --depth=1 ${{ env.ANYKERNEL_REPO }} AnyKernel3
+          
+          # Vérification et copie du fichier compilé
+          if [ -f kernel-source/out/arch/arm64/boot/Image.gz-dtb ]; then
+            cp kernel-source/out/arch/arm64/boot/Image.gz-dtb AnyKernel3/Image.gz-dtb
+          elif [ -f kernel-source/out/arch/arm64/boot/Image.gz ]; then
+            cp kernel-source/out/arch/arm64/boot/Image.gz AnyKernel3/Image.gz
+          fi
+          
+          cd AnyKernel3
+          sed -i 's/do.devicecheck=1/do.devicecheck=0/g' anykernel.sh
+          zip -r9 ../Kernel-LineageOS23-Kiev-Rooted.zip * -x .git README.md
 
-      - name: Sauvegarder l'image du noyau (Artifacts)
+      - name: Téléverser le livrable sur GitHub
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-LineageOS23-Kiev
-          path: |
-            arch/arm64/boot/Image.gz
-            arch/arm64/boot/dtbo.img
+          name: Kernel-Kiev-LineageOS23
+          path: Kernel-LineageOS23-Kiev-Rooted.zip
