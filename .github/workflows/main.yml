@@ -35,14 +35,11 @@ jobs:
           #!/bin/sh
           set -eu
           GKI_ROOT=$(pwd)
-          # Detection du bon repertoire drivers (standard sur Motorola sm8250)
           DRIVER_DIR="$GKI_ROOT/drivers"
           DRIVER_MAKEFILE="$DRIVER_DIR/Makefile"
           DRIVER_KCONFIG="$DRIVER_DIR/Kconfig"
-          
           echo "[+] Setting up ReSukiSU..."
           git clone https://github.com/ReSukiSU/ReSukiSU KernelSU
-          
           cd "$DRIVER_DIR"
           ln -sf "$(realpath --relative-to="$DRIVER_DIR" "$GKI_ROOT/KernelSU/kernel")" "kernelsu"
           grep -q "kernelsu" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "$DRIVER_MAKEFILE"
@@ -55,22 +52,22 @@ jobs:
         run: |
           make clean && make mrproper
           
-          # Configuration specifique Motorola
+          # Configuration specifique
           make ARCH=arm64 vendor/kona-perf_defconfig
           
-          # Injection des options vitales
+          # Injection des options KernelSU
           {
             echo "CONFIG_KSU=y"
             echo "CONFIG_KSU_LKM=y"
             echo "CONFIG_KSU_SUSFS=y"
-            echo "CONFIG_VDSO32=n"
           } >> arch/arm64/configs/vendor/kona-perf_defconfig
           
           make ARCH=arm64 alldefconfig
           
-          # Compilation avec séparation claire des rôles
-          # HOSTCC/HOSTLD sont les outils de ton PC (x86_64)
-          # CC/LD sont les outils de compilation pour le téléphone (ARM64)
+          # Ajout de flags de compilation pour être plus tolérant aux erreurs de syntaxe (Clang 4.19)
+          export KBUILD_CFLAGS="-Wno-error=unused-command-line-argument -Wno-error=format-security -Wno-error=incompatible-pointer-types"
+          
+          # Compilation avec les chemins explicites pour éviter les conflits Hôte/Cible
           make -j$(nproc) ARCH=arm64 \
             CC=/opt/proton-clang/bin/clang \
             LD=/opt/proton-clang/bin/ld.lld \
