@@ -26,19 +26,30 @@ jobs:
 
       - name: Build Kernel
         run: |
-          # 1. Inspecter le contenu du dossier actuel
-          echo "Contenu du dossier actuel :"
+          echo "--- Liste des dossiers à la racine ---"
           ls -F
           
-          # 2. Si le Makefile n'est pas ici, on cherche dans les sous-dossiers
-          echo "Recherche du Makefile :"
-          find . -name Makefile
+          # Cherche le dossier qui contient le fichier 'Makefile'
+          KERNEL_DIR=$(find . -maxdepth 2 -name Makefile -exec dirname {} \;)
+          echo "Dossier trouvé : $KERNEL_DIR"
           
-          # ATTENTION : Une fois que tu auras trouvé où est le Makefile, 
-          # tu devras ajouter 'cd nom_du_dossier' ici.
+          cd $KERNEL_DIR
           
-          # Pour l'instant, on laisse le reste en commentaire
-          # make clean && make mrproper
+          echo "--- Début de la compilation dans $KERNEL_DIR ---"
+          
+          # 1. Nettoyage
+          make clean && make mrproper
+          
+          # 2. Configurer
+          make ARCH=arm64 vendor/kona-perf_defconfig
+          
+          # 3. Compilation
+          export PATH=/opt/proton-clang/bin:$PATH
+          make -j$(nproc) ARCH=arm64 \
+            CC=clang LD=ld.lld LLVM=1 LLVM_IAS=1 \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CONFIG_KSU=y
+
 
 
       - name: Upload Kernel Image
