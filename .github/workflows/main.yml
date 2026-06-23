@@ -45,30 +45,19 @@ jobs:
           export SUBARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           
-          # Vérification de la config
-          if [ -f "arch/arm64/configs/vendor/kiev_defconfig" ]; then
-            echo "Config trouvée : kiev_defconfig"
-          else
-            echo "ERREUR : kiev_defconfig introuvable dans arch/arm64/configs/vendor/"
-            exit 1
-          fi
+          # DEBUG : Lister les fichiers de config disponibles pour trouver le bon
+          echo "--- Liste des fichiers de config disponibles ---"
+          find arch/arm64/configs -name "*defconfig*"
+          echo "-----------------------------------------------"
           
-          # Compilation
-          make ARCH=arm64 \
-            CC=clang \
-            LD=ld.lld \
-            LLVM=1 LLVM_IAS=1 \
-            HOSTCC=gcc HOSTLD=ld \
-            KCFLAGS="-w" KBUILD_AFLAGS="-w" \
-            kiev_defconfig
-            
-          make ARCH=arm64 \
-            CC=clang \
-            LD=ld.lld \
-            LLVM=1 LLVM_IAS=1 \
-            HOSTCC=gcc HOSTLD=ld \
-            KCFLAGS="-w" KBUILD_AFLAGS="-w" \
-            -j$(nproc) Image.gz
+          # On essaie de trouver le nom du defconfig basé sur les fichiers trouvés
+          # Si le log affiche 'vendor/kiev_defconfig', on l'utilisera. 
+          # Sinon, choisis celui qui ressemble le plus à ton appareil dans les logs.
+          
+          # Compilation (On laisse le script continuer même s'il échoue à cette étape)
+          # pour voir si la liste des fichiers s'affiche bien dans les logs.
+          echo "Lancement de la recherche de config..."
+
 
       - name: Preparation AnyKernel3
         run: |
