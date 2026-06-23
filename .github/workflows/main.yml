@@ -58,7 +58,7 @@ jobs:
           # Configuration specifique Motorola
           make ARCH=arm64 vendor/kona-perf_defconfig
           
-          # Injection des options vitales (KSU + VDSO32 off)
+          # Injection des options vitales
           {
             echo "CONFIG_KSU=y"
             echo "CONFIG_KSU_LKM=y"
@@ -68,12 +68,17 @@ jobs:
           
           make ARCH=arm64 alldefconfig
           
-          # Export du path pour Proton-Clang
-          export PATH=/opt/proton-clang/bin:$PATH
-          
-          # Compilation
+          # Compilation avec séparation claire des rôles
+          # HOSTCC/HOSTLD sont les outils de ton PC (x86_64)
+          # CC/LD sont les outils de compilation pour le téléphone (ARM64)
           make -j$(nproc) ARCH=arm64 \
-            CC=clang \
+            CC=/opt/proton-clang/bin/clang \
+            LD=/opt/proton-clang/bin/ld.lld \
+            AR=/opt/proton-clang/bin/llvm-ar \
+            NM=/opt/proton-clang/bin/llvm-nm \
+            OBJCOPY=/opt/proton-clang/bin/llvm-objcopy \
+            OBJDUMP=/opt/proton-clang/bin/llvm-objdump \
+            STRIP=/opt/proton-clang/bin/llvm-strip \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
             HOSTCC=gcc \
