@@ -34,25 +34,27 @@ jobs:
           #!/bin/sh
           set -eu
           GKI_ROOT=$(pwd)
+          
+          # Dossiers
           if test -d "$GKI_ROOT/common/drivers"; then DRIVER_DIR="$GKI_ROOT/common/drivers"; else DRIVER_DIR="$GKI_ROOT/drivers"; fi
           DRIVER_MAKEFILE="$DRIVER_DIR/Makefile"
           DRIVER_KCONFIG="$DRIVER_DIR/Kconfig"
+          DEFCONFIG="$GKI_ROOT/arch/arm64/configs/vendor/kona-perf_defconfig"
           
           echo "[+] Setting up ReSukiSU..."
           git clone https://github.com/ReSukiSU/ReSukiSU KernelSU
           
-          # FORCAGE : Désactiver les TP Hooks pour les noyaux 4.19
-          # Cela empêche le script de bloquer à la compilation
-          echo "CONFIG_KSU_SUSFS=y" >> "$GKI_ROOT/KernelSU/kernel/config.h"
-          echo "CONFIG_KSU_LKM=y" >> "$GKI_ROOT/KernelSU/kernel/config.h"
+          # Configuration : Ajout des options requises
+          echo "CONFIG_KSU=y" >> "$DEFCONFIG"
+          echo "CONFIG_KSU_LKM=y" >> "$DEFCONFIG"
+          echo "CONFIG_KSU_SUSFS=y" >> "$DEFCONFIG"
           
-          # Désactivation forcée des TP Hooks qui causent l'erreur
-          # On modifie le fichier de build de KernelSU pour sauter la vérification GKI
+          # Forcer le mode compatible Non-GKI (Désactivation des TP Redirect)
           sed -i 's/CONFIG_KSU_TP_REDIRECT=y/CONFIG_KSU_TP_REDIRECT=n/g' "$GKI_ROOT/KernelSU/kernel/Makefile" 2>/dev/null || true
-
+          
+          # Intégration
           cd "$DRIVER_DIR"
           ln -sf "$(realpath --relative-to="$DRIVER_DIR" "$GKI_ROOT/KernelSU/kernel")" "kernelsu"
-          
           grep -q "kernelsu" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "$DRIVER_MAKEFILE"
           grep -q "source \"drivers/kernelsu/Kconfig\"" "$DRIVER_KCONFIG" || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" "$DRIVER_KCONFIG"
           EOF
