@@ -41,7 +41,7 @@ jobs:
           make mrproper
           
           # Setup Toolchain
-          export PATH="/opt/proton-clang/bin:$PATH"
+          export PATH="$GITHUB_WORKSPACE/kernel_workspace/clang/bin:$PATH"
           export ARCH=arm64
           export SUBARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
@@ -88,4 +88,3 @@ jobs:
         with:
           name: ReSukiSU-Kernel-Kiev
           path: kernel_workspace/AnyKernel/*
-  
