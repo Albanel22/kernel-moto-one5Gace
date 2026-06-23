@@ -34,22 +34,14 @@ jobs:
           #!/bin/sh
           set -eu
           GKI_ROOT=$(pwd)
-          
-          # Dossiers
           if test -d "$GKI_ROOT/common/drivers"; then DRIVER_DIR="$GKI_ROOT/common/drivers"; else DRIVER_DIR="$GKI_ROOT/drivers"; fi
           DRIVER_MAKEFILE="$DRIVER_DIR/Makefile"
           DRIVER_KCONFIG="$DRIVER_DIR/Kconfig"
-          DEFCONFIG="$GKI_ROOT/arch/arm64/configs/vendor/kona-perf_defconfig"
           
           echo "[+] Setting up ReSukiSU..."
           git clone https://github.com/ReSukiSU/ReSukiSU KernelSU
           
-          # Configuration : Ajout des options requises
-          echo "CONFIG_KSU=y" >> "$DEFCONFIG"
-          echo "CONFIG_KSU_LKM=y" >> "$DEFCONFIG"
-          echo "CONFIG_KSU_SUSFS=y" >> "$DEFCONFIG"
-          
-          # Forcer le mode compatible Non-GKI (Désactivation des TP Redirect)
+          # Force le mode compatible Non-GKI
           sed -i 's/CONFIG_KSU_TP_REDIRECT=y/CONFIG_KSU_TP_REDIRECT=n/g' "$GKI_ROOT/KernelSU/kernel/Makefile" 2>/dev/null || true
           
           # Intégration
@@ -60,29 +52,25 @@ jobs:
           EOF
           chmod +x setup_resukisu.sh
           ./setup_resukisu.sh
-          
+
       - name: Build Kernel
         run: |
-          # 1. Nettoyage total pour éviter les résidus des builds précédents
           make clean && make mrproper
-          
-          # 2. Préparation du dossier d'isolation pour éviter les conflits libc.so
           mkdir -p bin_host
           ln -sf /usr/bin/gcc bin_host/gcc
           ln -sf /usr/bin/g++ bin_host/g++
           ln -sf /usr/bin/ld bin_host/ld
           
-          # 3. Configuration initiale
           make ARCH=arm64 vendor/kona-perf_defconfig
+          
+          # Injection des options vitales dans le defconfig
+          echo "CONFIG_VDSO32=n" >> arch/arm64/configs/vendor/kona-perf_defconfig
+          echo "CONFIG_KSU=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
+          echo "CONFIG_KSU_LKM=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
+          echo "CONFIG_KSU_SUSFS=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
+          
           make ARCH=arm64 alldefconfig
           
-          # 4. Injection des options KernelSU directement dans le fichier de config généré
-          echo "CONFIG_KSU=y" >> .config
-          echo "CONFIG_KSU_LKM=y" >> .config
-          echo "CONFIG_KSU_SUSFS=y" >> .config
-          make ARCH=arm64 olddefconfig
-          
-          # 5. Compilation
           export PATH=$(pwd)/bin_host:/opt/proton-clang/bin:$PATH
           
           make -j$(nproc) ARCH=arm64 \
@@ -96,7 +84,7 @@ jobs:
             LD=ld.lld \
             LLVM=1 \
             LLVM_IAS=1
-            
+
       - name: Upload Kernel Image
         uses: actions/upload-artifact@v4
         with:
