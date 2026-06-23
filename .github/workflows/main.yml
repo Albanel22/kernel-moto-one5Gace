@@ -12,8 +12,6 @@ jobs:
           sudo apt-get update
           # Ajout de gcc-aarch64-linux-gnu pour fournir le linker aarch64
           sudo apt-get install -y bc bison build-essential ccache flex g++-multilib gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev libtinfo6 pahole gcc-aarch64-linux-gnu
-          sudo apt-get update
-          sudo apt-get install -y bc bison build-essential ccache flex g++-multilib gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev libtinfo6 pahole
 
       - name: Telechargement de Clang (Toolchain)
         run: |
@@ -28,25 +26,13 @@ jobs:
       - name: Injection ReSukiSU
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/kernel-src
-          
-          # Nettoyage
           rm -rf drivers/kernelsu
-          
-          # Clonage dans le dossier drivers
           git clone https://github.com/ReSukiSU/ReSukiSU drivers/kernelsu
-          
-          # Retour à la racine pour assurer que nous sommes dans kernel-src
-          cd $GITHUB_WORKSPACE/kernel_workspace/kernel-src
-          
-          # Vérification et ajout dans le Makefile des pilotes
-          # On vérifie bien que drivers/Makefile existe
+          cd drivers/kernelsu && git checkout main && cd ..
           if [ -f "drivers/Makefile" ]; then
             if ! grep -q "obj-\$(CONFIG_KSU) += kernelsu/" drivers/Makefile; then
               echo "obj-\$(CONFIG_KSU) += kernelsu/" >> drivers/Makefile
             fi
-          else
-            echo "Erreur : drivers/Makefile introuvable dans $(pwd)"
-            exit 1
           fi
 
       - name: Build Kernel
@@ -54,33 +40,30 @@ jobs:
           cd $GITHUB_WORKSPACE/kernel_workspace/kernel-src
           make mrproper
           
-          # Configuration environnement
+          # Setup Toolchain
           export PATH="/opt/proton-clang/bin:$PATH"
           export ARCH=arm64
           export SUBARCH=arm64
-          
-          # Utilisation du compilateur aarch64 disponible sur le système Ubuntu
           export CROSS_COMPILE=aarch64-linux-gnu-
           
           # Configuration
           [ -f arch/arm64/configs/vendor/kiev_defconfig ] && DEFCONFIG="vendor/kiev_defconfig" || DEFCONFIG="vendor/lito-perf_defconfig"
           make $DEFCONFIG
           
-          # Compilation : On pointe LD vers lld (celui de clang) pour éviter de chercher aarch64-linux-android-ld
+          # Compilation
           make ARCH=arm64 \
             CC=clang \
             LD=ld.lld \
             LLVM=1 LLVM_IAS=1 \
             HOSTCC=gcc HOSTLD=ld \
+            KCFLAGS="-w" KBUILD_AFLAGS="-w" \
             -j$(nproc) Image.gz
-
-
 
       - name: Preparation AnyKernel3
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel
-          cp kernel-src/out/arch/arm64/boot/Image.gz AnyKernel/
+          cp kernel-src/arch/arm64/boot/Image.gz AnyKernel/
           
           cd AnyKernel
           cat << 'EOF' > anykernel.sh
@@ -105,3 +88,4 @@ jobs:
         with:
           name: ReSukiSU-Kernel-Kiev
           path: kernel_workspace/AnyKernel/*
+  
