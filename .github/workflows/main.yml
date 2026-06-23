@@ -35,12 +35,12 @@ jobs:
           set -eu
           GKI_ROOT=$(pwd)
           if test -d "$GKI_ROOT/common/drivers"; then DRIVER_DIR="$GKI_ROOT/common/drivers"; else DRIVER_DIR="$GKI_ROOT/drivers"; fi
-          DRIVER_MAKEFILE=$DRIVER_DIR/Makefile
-          DRIVER_KCONFIG=$DRIVER_DIR/Kconfig
           echo "[+] Setting up ReSukiSU..."
           git clone https://github.com/ReSukiSU/ReSukiSU KernelSU
           cd "$DRIVER_DIR"
           ln -sf "$(realpath --relative-to="$DRIVER_DIR" "$GKI_ROOT/KernelSU/kernel")" "kernelsu"
+          echo "CONFIG_KSU_SUSFS=y" >> "$GKI_ROOT/KernelSU/kernel/config.h"
+          echo "CONFIG_KSU_LKM=y" >> "$GKI_ROOT/KernelSU/kernel/config.h"
           grep -q "kernelsu" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "$DRIVER_MAKEFILE"
           grep -q "source \"drivers/kernelsu/Kconfig\"" "$DRIVER_KCONFIG" || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" "$DRIVER_KCONFIG"
           EOF
@@ -53,17 +53,17 @@ jobs:
           make ARCH=arm64 vendor/kona-perf_defconfig
           make ARCH=arm64 olddefconfig
           
-          # On ajoute Proton-Clang au PATH dès le début
           export PATH=/opt/proton-clang/bin:$PATH
           
-          # On compile tout en un seul bloc, mais en forçant le lieur système pour l'hôte
+          # Compilation avec forçage explicite du lieur hôte système
           make -j$(nproc) ARCH=arm64 \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
             HOSTCC=gcc \
             HOSTCXX=g++ \
-            HOSTLD=ld \
+            HOSTLD=/usr/bin/ld \
+            KBUILD_HOSTLD=/usr/bin/ld \
             LD=ld.lld \
             LLVM=1 \
             LLVM_IAS=1 \
