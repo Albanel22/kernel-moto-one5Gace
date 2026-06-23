@@ -10,7 +10,6 @@ jobs:
       - name: Installation des dependances
         run: |
           sudo apt-get update
-          # Utilisation de binutils-aarch64-linux-gnu au lieu du gcc complet pour éviter les conflits
           sudo apt-get install -y bc bison build-essential ccache flex g++-multilib gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev libtinfo6 pahole binutils-aarch64-linux-gnu
 
       - name: Telechargement de Clang (Toolchain)
@@ -46,11 +45,23 @@ jobs:
           export SUBARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           
-          # Configuration
-          [ -f arch/arm64/configs/vendor/kiev_defconfig ] && DEFCONFIG="vendor/kiev_defconfig" || DEFCONFIG="vendor/lito-perf_defconfig"
-          make $DEFCONFIG
+          # Vérification de la config
+          if [ -f "arch/arm64/configs/vendor/kiev_defconfig" ]; then
+            echo "Config trouvée : kiev_defconfig"
+          else
+            echo "ERREUR : kiev_defconfig introuvable dans arch/arm64/configs/vendor/"
+            exit 1
+          fi
           
-          # Compilation : On utilise binutils pour le linker
+          # Compilation
+          make ARCH=arm64 \
+            CC=clang \
+            LD=ld.lld \
+            LLVM=1 LLVM_IAS=1 \
+            HOSTCC=gcc HOSTLD=ld \
+            KCFLAGS="-w" KBUILD_AFLAGS="-w" \
+            kiev_defconfig
+            
           make ARCH=arm64 \
             CC=clang \
             LD=ld.lld \
