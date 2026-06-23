@@ -10,6 +10,9 @@ jobs:
       - name: Installation des dependances
         run: |
           sudo apt-get update
+          # Ajout de gcc-aarch64-linux-gnu pour fournir le linker aarch64
+          sudo apt-get install -y bc bison build-essential ccache flex g++-multilib gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev libtinfo6 pahole gcc-aarch64-linux-gnu
+          sudo apt-get update
           sudo apt-get install -y bc bison build-essential ccache flex g++-multilib gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev libtinfo6 pahole
 
       - name: Telechargement de Clang (Toolchain)
@@ -46,33 +49,31 @@ jobs:
             exit 1
           fi
 
-
       - name: Build Kernel
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/kernel-src
-          
-          # Nettoyage profond
           make mrproper
-          rm -rf out
           
-          # Setup Toolchain
+          # Configuration environnement
           export PATH="/opt/proton-clang/bin:$PATH"
           export ARCH=arm64
           export SUBARCH=arm64
           
-          # Configuration (Directement dans la source)
+          # Utilisation du compilateur aarch64 disponible sur le système Ubuntu
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          
+          # Configuration
           [ -f arch/arm64/configs/vendor/kiev_defconfig ] && DEFCONFIG="vendor/kiev_defconfig" || DEFCONFIG="vendor/lito-perf_defconfig"
           make $DEFCONFIG
           
-          # Compilation directe (sans O=out)
-          # On ajoute KBUILD_OUTPUT pour garantir que tout est propre
+          # Compilation : On pointe LD vers lld (celui de clang) pour éviter de chercher aarch64-linux-android-ld
           make ARCH=arm64 \
             CC=clang \
-            CLANG_TRIPLE=aarch64-linux-gnu- \
-            CROSS_COMPILE=aarch64-linux-android- \
-            HOSTCC=gcc \
-            HOSTLD=ld \
+            LD=ld.lld \
+            LLVM=1 LLVM_IAS=1 \
+            HOSTCC=gcc HOSTLD=ld \
             -j$(nproc) Image.gz
+
 
 
       - name: Preparation AnyKernel3
