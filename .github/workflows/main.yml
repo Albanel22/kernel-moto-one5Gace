@@ -69,22 +69,30 @@ jobs:
           make ARCH=arm64 vendor/kona-perf_defconfig
           make ARCH=arm64 olddefconfig
           
-          export PATH=/opt/proton-clang/bin:$PATH
+          # 1. Créer un dossier "bin" propre pour le build hôte
+          mkdir -p bin_host
+          ln -s /usr/bin/gcc bin_host/gcc
+          ln -s /usr/bin/g++ bin_host/g++
+          ln -s /usr/bin/ld bin_host/ld
           
-          # Compilation avec forçage explicite du lieur hôte système
+          # 2. On prépare le PATH : le dossier bin_host est prioritaire
+          # Cela force 'make' à utiliser le gcc/ld système pour les outils hôtes
+          export PATH=$(pwd)/bin_host:/opt/proton-clang/bin:$PATH
+          
+          echo "[+] PATH actuel: $PATH"
+          
+          # 3. Compilation
           make -j$(nproc) ARCH=arm64 \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
             HOSTCC=gcc \
             HOSTCXX=g++ \
-            HOSTLD=/usr/bin/ld \
-            KBUILD_HOSTLD=/usr/bin/ld \
+            HOSTLD=ld \
             LD=ld.lld \
             LLVM=1 \
             LLVM_IAS=1 \
             CONFIG_KSU=y
-
       - name: Upload Kernel Image
         uses: actions/upload-artifact@v4
         with:
