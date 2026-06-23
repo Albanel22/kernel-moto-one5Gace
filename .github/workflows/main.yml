@@ -36,26 +36,55 @@ jobs:
           set -eu
           GKI_ROOT=$(pwd)
           DRIVER_DIR="$GKI_ROOT/drivers"
-          DRIVER_MAKEFILE="$DRIVER_DIR/Makefile"
-          DRIVER_KCONFIG="$DRIVER_DIR/Kconfig"
           echo "[+] Setting up ReSukiSU..."
           git clone https://github.com/ReSukiSU/ReSukiSU KernelSU
           cd "$DRIVER_DIR"
           ln -sf "$(realpath --relative-to="$DRIVER_DIR" "$GKI_ROOT/KernelSU/kernel")" "kernelsu"
           grep -q "kernelsu" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "$DRIVER_MAKEFILE"
-          grep -q "source \"drivers/kernelsu/Kconfig\"" "$DRIVER_KCONFIG" || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" "$DRIVER_KCONFIG"
           EOF
           chmod +x setup_resukisu.sh
           ./setup_resukisu.sh
 
+      - name: Apply Fix-Werror Patch
+        run: |
+          cat << 'EOF' > fix-werror.patch
+          --- a/Makefile
+          +++ b/Makefile
+          @@ -424,11 +424,9 @@ LINUXINCLUDE    := \
+           		$(USERINCLUDE)
+           
+           KBUILD_AFLAGS   := -D__ASSEMBLY__ -march=armv8-a+lse
+          -KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
+          +KBUILD_CFLAGS   := -Wall -Wundef -Wno-trigraphs \
+           		   -fno-strict-aliasing -fno-common -fshort-wchar \
+          -		   -Werror-implicit-function-declaration \
+           		   -Wno-format-security \
+          -		   -Werror \
+           		   -Xassembler -march=armv8-a+lse \
+           		   -std=gnu89
+           KBUILD_CPPFLAGS := -D__KERNEL__
+          @@ -930,15 +928,9 @@ KBUILD_CFLAGS   += $(call cc-option,-fconserve-stack)
+           # disallow errors like 'EXPORT_GPL(foo);' with missing header
+           KBUILD_CFLAGS   += $(call cc-option,-Werror=implicit-int)
+           
+          -# require functions to have arguments in prototypes, not empty 'int foo()'
+          -KBUILD_CFLAGS   += $(call cc-option,-Werror=strict-prototypes)
+          -
+           # Prohibit date/time macros, which would make the build non-deterministic
+           KBUILD_CFLAGS   += $(call cc-option,-Werror=date-time)
+           
+          -# enforce correct pointer usage
+          -KBUILD_CFLAGS   += $(call cc-option,-Werror=incompatible-pointer-types)
+          -
+           # Require designated initializers for all marked structures
+           KBUILD_CFLAGS   += $(call cc-option,-Werror=designated-init)
+          EOF
+          git apply fix-werror.patch
+
       - name: Build Kernel
         run: |
           make clean && make mrproper
-          
-          # 1. Configuration initiale
           make ARCH=arm64 vendor/kona-perf_defconfig
-          
-          # 2. Injection des options KernelSU
           {
             echo "CONFIG_KSU=y"
             echo "CONFIG_KSU_LKM=y"
@@ -63,29 +92,15 @@ jobs:
             echo "CONFIG_VDSO32=n"
           } >> arch/arm64/configs/vendor/kona-perf_defconfig
           
-          # 3. Désactivation forcée de vdso32 dans le Makefile du noyau
-          # Cela empêche le Makefile de descendre dans le dossier vdso32
-          sed -i '/vdso32/d' arch/arm64/kernel/Makefile
-          
           make ARCH=arm64 alldefconfig
           
-          # 4. Compilation
-          export KBUILD_CFLAGS="-Wno-error"
+          # Compilation
           make -j$(nproc) ARCH=arm64 \
             CC=/opt/proton-clang/bin/clang \
             LD=/opt/proton-clang/bin/ld.lld \
-            AR=/opt/proton-clang/bin/llvm-ar \
-            NM=/opt/proton-clang/bin/llvm-nm \
-            OBJCOPY=/opt/proton-clang/bin/llvm-objcopy \
-            OBJDUMP=/opt/proton-clang/bin/llvm-objdump \
-            STRIP=/opt/proton-clang/bin/llvm-strip \
-            CLANG_TRIPLE=aarch64-linux-gnu- \
-            CROSS_COMPILE=aarch64-linux-gnu- \
-            HOSTCC=gcc \
-            HOSTCXX=g++ \
-            HOSTLD=ld \
             LLVM=1 \
-            LLVM_IAS=1
+            LLVM_IAS=1 \
+            HOSTCC=gcc
 
       - name: Upload Kernel Image
         uses: actions/upload-artifact@v4
