@@ -20,18 +20,26 @@ jobs:
         run: |
           git clone --depth=1 https://github.com/LineageOS/android_kernel_motorola_sm8250.git -b lineage-23.2 $GITHUB_WORKSPACE/kernel_workspace/kernel-src
 
-      - name: Injection ReSukiSU
+      - name: Injection ReSukiSU Propre
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/kernel-src
-          git clone https://github.com/ReSukiSU/ReSukiSU KernelSU
-          # Installation propre via le script officiel
-          cd KernelSU
+          
+          # Nettoyage avant injection
+          rm -rf drivers/kernelsu
+          
+          # Cloner ReSukiSU directement dans le dossier drivers/kernelsu
+          # Cela satisfait la vérification "git submodule" du Kbuild
+          git clone https://github.com/ReSukiSU/ReSukiSU drivers/kernelsu
+          
+          # S'assurer que le dossier est bien un dépôt git initialisé
+          cd drivers/kernelsu
           git checkout main
-          cd ..
-          # Création du lien et modification du makefile pour Kiev
-          mkdir -p drivers/kernelsu
-          ln -sf "$(pwd)/KernelSU/kernel/"* drivers/kernelsu/
-          echo "obj-\$(CONFIG_KSU) += kernelsu/" >> drivers/Makefile
+          
+          # Revenir à la racine pour modifier le Makefile principal
+          cd ../..
+          if ! grep -q "obj-\$(CONFIG_KSU) += kernelsu/" drivers/Makefile; then
+            echo "obj-\$(CONFIG_KSU) += kernelsu/" >> drivers/Makefile
+          fi
 
       - name: Build Kernel
         run: |
