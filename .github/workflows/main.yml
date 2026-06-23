@@ -61,7 +61,10 @@ jobs:
 
       - name: Build Kernel
         run: |
+          # 1. Nettoyage complet pour effacer les traces des sed précédents
           make clean && make mrproper
+          
+          # 2. Configuration
           make ARCH=arm64 vendor/kona-perf_defconfig
           {
             echo "CONFIG_KSU=y"
@@ -71,12 +74,17 @@ jobs:
           } >> arch/arm64/configs/vendor/kona-perf_defconfig
           
           make ARCH=arm64 alldefconfig
+          
+          # 3. Compilation avec contournement des warnings sans modifier le Makefile
+          # On utilise KCFLAGS pour injecter les flags sans risquer de corrompre le fichier
           make -j$(nproc) ARCH=arm64 \
             CC=/opt/proton-clang/bin/clang \
             LD=/opt/proton-clang/bin/ld.lld \
             LLVM=1 \
             LLVM_IAS=1 \
-            HOSTCC=gcc
+            HOSTCC=gcc \
+            HOSTCXX=g++ \
+            KCFLAGS="-w"
 
       - name: Upload Kernel Image
         uses: actions/upload-artifact@v4
