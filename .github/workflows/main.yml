@@ -25,12 +25,27 @@ jobs:
       - name: Injection ReSukiSU
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/kernel-src
+          
+          # Nettoyage
           rm -rf drivers/kernelsu
+          
+          # Clonage dans le dossier drivers
           git clone https://github.com/ReSukiSU/ReSukiSU drivers/kernelsu
-          cd drivers/kernelsu && git checkout main && cd ..
-          if ! grep -q "obj-\$(CONFIG_KSU) += kernelsu/" drivers/Makefile; then
-            echo "obj-\$(CONFIG_KSU) += kernelsu/" >> drivers/Makefile
+          
+          # Retour à la racine pour assurer que nous sommes dans kernel-src
+          cd $GITHUB_WORKSPACE/kernel_workspace/kernel-src
+          
+          # Vérification et ajout dans le Makefile des pilotes
+          # On vérifie bien que drivers/Makefile existe
+          if [ -f "drivers/Makefile" ]; then
+            if ! grep -q "obj-\$(CONFIG_KSU) += kernelsu/" drivers/Makefile; then
+              echo "obj-\$(CONFIG_KSU) += kernelsu/" >> drivers/Makefile
+            fi
+          else
+            echo "Erreur : drivers/Makefile introuvable dans $(pwd)"
+            exit 1
           fi
+
 
       - name: Build Kernel
         run: |
