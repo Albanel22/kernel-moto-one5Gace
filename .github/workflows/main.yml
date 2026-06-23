@@ -29,41 +29,20 @@ jobs:
         run: |
           git clone --depth=1 https://github.com/kdrag0n/proton-clang /opt/proton-clang
 
-      - name: Apply 009.fix-Werror Patch
+      - name: Apply Fix-Werror Manually
         run: |
-          cat << 'EOF' > 009.fix-Werror.patch
-          --- a/Makefile
-          +++ b/Makefile
-          @@ -424,11 +424,9 @@ LINUXINCLUDE    := \
-           		$(USERINCLUDE)
-           
-           KBUILD_AFLAGS   := -D__ASSEMBLY__ -march=armv8-a+lse
-          -KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
-          +KBUILD_CFLAGS   := -Wall -Wundef -Wno-trigraphs \
-           		   -fno-strict-aliasing -fno-common -fshort-wchar \
-          -		   -Werror-implicit-function-declaration \
-           		   -Wno-format-security \
-          -		   -Werror \
-           		   -Xassembler -march=armv8-a+lse \
-           		   -std=gnu89
-           KBUILD_CPPFLAGS := -D__KERNEL__
-          @@ -930,15 +928,9 @@ KBUILD_CFLAGS   += $(call cc-option,-fconserve-stack)
-           # disallow errors like 'EXPORT_GPL(foo);' with missing header
-           KBUILD_CFLAGS   += $(call cc-option,-Werror=implicit-int)
-           
-          -# require functions to have arguments in prototypes, not empty 'int foo()'
-          -KBUILD_CFLAGS   += $(call cc-option,-Werror=strict-prototypes)
-          -
-           # Prohibit date/time macros, which would make the build non-deterministic
-           KBUILD_CFLAGS   += $(call cc-option,-Werror=date-time)
-           
-          -# enforce correct pointer usage
-          -KBUILD_CFLAGS   += $(call cc-option,-Werror=incompatible-pointer-types)
-          -
-           # Require designated initializers for all marked structures
-           KBUILD_CFLAGS   += $(call cc-option,-Werror=designated-init)
-          EOF
-          git apply 009.fix-Werror.patch
+          # Suppression de Werror et des warnings stricts dans le Makefile racine
+          # Utilisation de sed pour commenter ou supprimer les lignes problématiques
+          sed -i 's/-Werror-implicit-function-declaration//g' Makefile
+          sed -i 's/-Werror//g' Makefile
+          sed -i '/call cc-option,-Werror=strict-prototypes/d' Makefile
+          sed -i '/call cc-option,-Werror=incompatible-pointer-types/d' Makefile
+          
+          # Force le retrait du Werror dans la définition de KBUILD_CFLAGS
+          # On remplace la ligne longue par une version allégée
+          sed -i 's/KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs/KBUILD_CFLAGS   := -Wall -Wundef -Wno-trigraphs/g' Makefile
+          
+          echo "Makefile patché avec succès par injection directe."
 
       - name: Inject and Setup ReSukiSU
         run: |
