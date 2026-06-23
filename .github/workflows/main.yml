@@ -63,23 +63,28 @@ jobs:
           
       - name: Build Kernel
         run: |
+          # 1. Nettoyage total pour éviter les résidus des builds précédents
           make clean && make mrproper
+          
+          # 2. Préparation du dossier d'isolation pour éviter les conflits libc.so
+          mkdir -p bin_host
+          ln -sf /usr/bin/gcc bin_host/gcc
+          ln -sf /usr/bin/g++ bin_host/g++
+          ln -sf /usr/bin/ld bin_host/ld
+          
+          # 3. Configuration initiale
           make ARCH=arm64 vendor/kona-perf_defconfig
+          make ARCH=arm64 alldefconfig
+          
+          # 4. Injection des options KernelSU directement dans le fichier de config généré
+          echo "CONFIG_KSU=y" >> .config
+          echo "CONFIG_KSU_LKM=y" >> .config
+          echo "CONFIG_KSU_SUSFS=y" >> .config
           make ARCH=arm64 olddefconfig
           
-          # 1. Créer un dossier "bin" propre pour le build hôte
-          mkdir -p bin_host
-          ln -s /usr/bin/gcc bin_host/gcc
-          ln -s /usr/bin/g++ bin_host/g++
-          ln -s /usr/bin/ld bin_host/ld
-          
-          # 2. On prépare le PATH : le dossier bin_host est prioritaire
-          # Cela force 'make' à utiliser le gcc/ld système pour les outils hôtes
+          # 5. Compilation
           export PATH=$(pwd)/bin_host:/opt/proton-clang/bin:$PATH
           
-          echo "[+] PATH actuel: $PATH"
-          
-          # 3. Compilation
           make -j$(nproc) ARCH=arm64 \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
@@ -87,10 +92,11 @@ jobs:
             HOSTCC=gcc \
             HOSTCXX=g++ \
             HOSTLD=ld \
+            KBUILD_HOSTLD=/usr/bin/ld \
             LD=ld.lld \
             LLVM=1 \
-            LLVM_IAS=1 \
-            CONFIG_KSU=y
+            LLVM_IAS=1
+            
       - name: Upload Kernel Image
         uses: actions/upload-artifact@v4
         with:
