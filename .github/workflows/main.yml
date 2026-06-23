@@ -56,7 +56,6 @@ jobs:
 
       - name: Build Kernel
         run: |
-          # Nettoyage profond pour garantir un Makefile propre
           git checkout Makefile
           make clean && make mrproper
           
@@ -69,12 +68,16 @@ jobs:
             echo "CONFIG_KSU=y"
             echo "CONFIG_KSU_LKM=y"
             echo "CONFIG_KSU_SUSFS=y"
-            echo "CONFIG_VDSO32=n"
+            # On désactive le VDSO 32 bits et on force le VDSO à ne pas être compilé 
+            # si le toolchain Clang le rejette
+            echo "CONFIG_VDSO32=n" >> .config
+            echo "CONFIG_COMPAT=n" >> .config 
           } >> arch/arm64/configs/vendor/kona-perf_defconfig
           
           make ARCH=arm64 alldefconfig
           
-          # Compilation avec KCFLAGS="-w" (Méthode Ravindu modernisée)
+          # Compilation : On ajoute DISABLE_LTO=1 car Clang 13+ 
+          # déteste souvent le LTO des vieux noyaux
           make -j$(nproc) ARCH=arm64 \
             CC=/opt/proton-clang/bin/clang \
             LD=/opt/proton-clang/bin/ld.lld \
@@ -83,7 +86,9 @@ jobs:
             HOSTCC=gcc \
             HOSTCXX=g++ \
             KCFLAGS="-w" \
-            KBUILD_AFLAGS="-w"
+            KBUILD_AFLAGS="-w" \
+            DISABLE_LTO=1
+
 
       - name: Upload Kernel Image
         uses: actions/upload-artifact@v4
