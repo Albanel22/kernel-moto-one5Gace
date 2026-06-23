@@ -29,46 +29,57 @@ jobs:
         run: |
           git clone --depth=1 https://github.com/kdrag0n/proton-clang /opt/proton-clang
 
+      - name: Apply 009.fix-Werror Patch
+        run: |
+          cat << 'EOF' > 009.fix-Werror.patch
+          --- a/Makefile
+          +++ b/Makefile
+          @@ -424,11 +424,9 @@ LINUXINCLUDE    := \
+           		$(USERINCLUDE)
+           
+           KBUILD_AFLAGS   := -D__ASSEMBLY__ -march=armv8-a+lse
+          -KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
+          +KBUILD_CFLAGS   := -Wall -Wundef -Wno-trigraphs \
+           		   -fno-strict-aliasing -fno-common -fshort-wchar \
+          -		   -Werror-implicit-function-declaration \
+           		   -Wno-format-security \
+          -		   -Werror \
+           		   -Xassembler -march=armv8-a+lse \
+           		   -std=gnu89
+           KBUILD_CPPFLAGS := -D__KERNEL__
+          @@ -930,15 +928,9 @@ KBUILD_CFLAGS   += $(call cc-option,-fconserve-stack)
+           # disallow errors like 'EXPORT_GPL(foo);' with missing header
+           KBUILD_CFLAGS   += $(call cc-option,-Werror=implicit-int)
+           
+          -# require functions to have arguments in prototypes, not empty 'int foo()'
+          -KBUILD_CFLAGS   += $(call cc-option,-Werror=strict-prototypes)
+          -
+           # Prohibit date/time macros, which would make the build non-deterministic
+           KBUILD_CFLAGS   += $(call cc-option,-Werror=date-time)
+           
+          -# enforce correct pointer usage
+          -KBUILD_CFLAGS   += $(call cc-option,-Werror=incompatible-pointer-types)
+          -
+           # Require designated initializers for all marked structures
+           KBUILD_CFLAGS   += $(call cc-option,-Werror=designated-init)
+          EOF
+          git apply 009.fix-Werror.patch
+
       - name: Inject and Setup ReSukiSU
         run: |
           cat << 'EOF' > setup_resukisu.sh
           #!/bin/sh
           set -eu
-          GKI_ROOT=$(pwd)
-          DRIVER_DIR="$GKI_ROOT/drivers"
-          # Définition manquante ajoutée ici
+          DRIVER_DIR="$(pwd)/drivers"
           DRIVER_MAKEFILE="$DRIVER_DIR/Makefile"
-          
-          echo "[+] Setting up ReSukiSU..."
           git clone https://github.com/ReSukiSU/ReSukiSU KernelSU
-          
           cd "$DRIVER_DIR"
-          ln -sf "$(realpath --relative-to="$DRIVER_DIR" "$GKI_ROOT/KernelSU/kernel")" "kernelsu"
-          
-          # Vérification de sécurité pour éviter l'erreur si le Makefile n'existe pas
-          if [ -f "$DRIVER_MAKEFILE" ]; then
-              grep -q "kernelsu" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "$DRIVER_MAKEFILE"
-          else
-              echo "obj-\$(CONFIG_KSU) += kernelsu/" > "$DRIVER_MAKEFILE"
-          fi
+          ln -sf "$(realpath --relative-to="$DRIVER_DIR" "$(pwd)/../KernelSU/kernel")" "kernelsu"
+          grep -q "kernelsu" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "$DRIVER_MAKEFILE"
           EOF
           chmod +x setup_resukisu.sh
           ./setup_resukisu.sh
 
-      - name: Apply Fix-Werror Patch
-        run: |
-          # Utilisation de sed pour supprimer les flags Werror directement dans le Makefile
-          # 1. Supprime -Werror-implicit-function-declaration
-          sed -i 's/-Werror-implicit-function-declaration//g' Makefile
-          # 2. Supprime -Werror
-          sed -i 's/-Werror//g' Makefile
-          # 3. Supprime les lignes Werror pour les prototypes et les pointeurs
-          sed -i '/call cc-option,-Werror=strict-prototypes/d' Makefile
-          sed -i '/call cc-option,-Werror=incompatible-pointer-types/d' Makefile
-          
-          echo "Patch appliqué avec succès via sed."
-
-    
       - name: Build Kernel
         run: |
           make clean && make mrproper
@@ -81,8 +92,6 @@ jobs:
           } >> arch/arm64/configs/vendor/kona-perf_defconfig
           
           make ARCH=arm64 alldefconfig
-          
-          # Compilation
           make -j$(nproc) ARCH=arm64 \
             CC=/opt/proton-clang/bin/clang \
             LD=/opt/proton-clang/bin/ld.lld \
@@ -95,4 +104,3 @@ jobs:
         with:
           name: Kernel-Image-Motorola
           path: out/arch/arm64/boot/Image.gz-dtb
-          if-no-files-found: warn
