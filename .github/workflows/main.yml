@@ -23,8 +23,9 @@ jobs:
             erofs-utils default-jdk gnupg flex bison gperf build-essential zip curl libc6-dev \
             libncurses-dev libx11-dev libreadline-dev libgl1 libgl1-mesa-dev make bc grep \
             tofrodos python3-markdown libxml2-utils xsltproc libc6-dev libtinfo6 repo cpio \
-            kmod openssl libelf-dev pahole libssl-dev libarchive-tools zstd rsync
-
+            kmod openssl libelf-dev pahole libssl-dev libarchive-tools zstd rsync \
+            bison flex  # Ajout explicite pour le DTC
+      
       - name: Setup Toolchain
         run: |
           git clone --depth=1 https://github.com/kdrag0n/proton-clang /opt/proton-clang
@@ -68,16 +69,13 @@ jobs:
             echo "CONFIG_KSU=y"
             echo "CONFIG_KSU_LKM=y"
             echo "CONFIG_KSU_SUSFS=y"
-            # On désactive le VDSO 32 bits et on force le VDSO à ne pas être compilé 
-            # si le toolchain Clang le rejette
-            echo "CONFIG_VDSO32=n" >> .config
-            echo "CONFIG_COMPAT=n" >> .config 
+            echo "CONFIG_VDSO32=n"
+            echo "CONFIG_COMPAT=n"
           } >> arch/arm64/configs/vendor/kona-perf_defconfig
           
           make ARCH=arm64 alldefconfig
           
-          # Compilation : On ajoute DISABLE_LTO=1 car Clang 13+ 
-          # déteste souvent le LTO des vieux noyaux
+          # Compilation forcée avec contournement des erreurs de scripts
           make -j$(nproc) ARCH=arm64 \
             CC=/opt/proton-clang/bin/clang \
             LD=/opt/proton-clang/bin/ld.lld \
@@ -87,8 +85,8 @@ jobs:
             HOSTCXX=g++ \
             KCFLAGS="-w" \
             KBUILD_AFLAGS="-w" \
+            HOSTCFLAGS="-w -fcommon" \
             DISABLE_LTO=1
-
 
       - name: Upload Kernel Image
         uses: actions/upload-artifact@v4
