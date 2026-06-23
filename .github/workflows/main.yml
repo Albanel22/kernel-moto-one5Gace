@@ -50,26 +50,30 @@ jobs:
       - name: Build Kernel
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/kernel-src
-          make clean && make mrproper
           
-          # Configuration environnement (Ton ancienne méthode)
-          CLANG_BIN=$(dirname $(find $GITHUB_WORKSPACE/kernel_workspace/clang -name clang -type f | head -n 1))
-          export PATH="$CLANG_BIN:$PATH"
+          # Nettoyage profond
+          make mrproper
+          rm -rf out
+          
+          # Setup Toolchain
+          export PATH="/opt/proton-clang/bin:$PATH"
           export ARCH=arm64
           export SUBARCH=arm64
           
-          # Choix config
-          [ -f arch/arm64/configs/vendor/kiev_defconfig ] && DEFCONFIG="kiev_defconfig" || DEFCONFIG="lito-perf_defconfig"
-          make O=out $DEFCONFIG
+          # Configuration (Directement dans la source)
+          [ -f arch/arm64/configs/vendor/kiev_defconfig ] && DEFCONFIG="vendor/kiev_defconfig" || DEFCONFIG="vendor/lito-perf_defconfig"
+          make $DEFCONFIG
           
-          # Compilation avec forçage GCC pour les outils hôtes
-          LTO=thin make O=out ARCH=arm64 \
+          # Compilation directe (sans O=out)
+          # On ajoute KBUILD_OUTPUT pour garantir que tout est propre
+          make ARCH=arm64 \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-android- \
             HOSTCC=gcc \
             HOSTLD=ld \
             -j$(nproc) Image.gz
+
 
       - name: Preparation AnyKernel3
         run: |
