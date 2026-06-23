@@ -1,4 +1,4 @@
-name: Build ReSukiSU Kernel - Final Kiev
+name: Build ReSukiSU Kernel - Final Moto Kiev
 
 on:
   workflow_dispatch:
@@ -9,34 +9,25 @@ jobs:
     steps:
       - name: Installation des dependances
         run: |
-          sudo apt update && sudo apt install -y bc bison build-essential ccache flex g++-multilib gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev libtinfo6 pahole
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential ccache flex g++-multilib gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev libtinfo6 pahole
 
-      - name: Setup Workspace & Toolchain
+      - name: Telechargement de Clang (Toolchain)
         run: |
           mkdir -p $GITHUB_WORKSPACE/kernel_workspace
-          git clone --depth=1 https://github.com/kdrag0n/proton-clang /opt/proton-clang
+          cd $GITHUB_WORKSPACE/kernel_workspace
+          git clone --depth=1 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 -b main-kernel-build-2024 clang
 
       - name: Clonage sources kernel
         run: |
           git clone --depth=1 https://github.com/LineageOS/android_kernel_motorola_sm8250.git -b lineage-23.2 $GITHUB_WORKSPACE/kernel_workspace/kernel-src
 
-      - name: Injection ReSukiSU Propre
+      - name: Injection ReSukiSU
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/kernel-src
-          
-          # Nettoyage avant injection
           rm -rf drivers/kernelsu
-          
-          # Cloner ReSukiSU directement dans le dossier drivers/kernelsu
-          # Cela satisfait la vérification "git submodule" du Kbuild
           git clone https://github.com/ReSukiSU/ReSukiSU drivers/kernelsu
-          
-          # S'assurer que le dossier est bien un dépôt git initialisé
-          cd drivers/kernelsu
-          git checkout main
-          
-          # Revenir à la racine pour modifier le Makefile principal
-          cd ../..
+          cd drivers/kernelsu && git checkout main && cd ..
           if ! grep -q "obj-\$(CONFIG_KSU) += kernelsu/" drivers/Makefile; then
             echo "obj-\$(CONFIG_KSU) += kernelsu/" >> drivers/Makefile
           fi
@@ -44,36 +35,35 @@ jobs:
       - name: Build Kernel
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/kernel-src
+          make clean && make mrproper
           
-          # Nettoyage
-          make mrproper
-          rm -rf out
-          
-          # Setup Toolchain
-          CLANG_BIN=/opt/proton-clang/bin
+          # Configuration environnement (Ton ancienne méthode)
+          CLANG_BIN=$(dirname $(find $GITHUB_WORKSPACE/kernel_workspace/clang -name clang -type f | head -n 1))
           export PATH="$CLANG_BIN:$PATH"
+          export ARCH=arm64
+          export SUBARCH=arm64
           
-          # Configuration
-          [ -f arch/arm64/configs/vendor/kiev_defconfig ] && DEFCONFIG="vendor/kiev_defconfig" || DEFCONFIG="vendor/lito-perf_defconfig"
-          make O=out ARCH=arm64 $DEFCONFIG
+          # Choix config
+          [ -f arch/arm64/configs/vendor/kiev_defconfig ] && DEFCONFIG="kiev_defconfig" || DEFCONFIG="lito-perf_defconfig"
+          make O=out $DEFCONFIG
           
-          # COMPILATION FORCÉE : 
-          # On définit HOSTCC et HOSTLD pour pointer vers les outils système, 
-          # même si le PATH contient proton-clang.
-          make O=out ARCH=arm64 \
-            LLVM=1 LLVM_IAS=1 \
+          # Compilation avec forçage GCC pour les outils hôtes
+          LTO=thin make O=out ARCH=arm64 \
+            CC=clang \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            CROSS_COMPILE=aarch64-linux-android- \
             HOSTCC=gcc \
             HOSTLD=ld \
-            KCFLAGS="-w" KBUILD_AFLAGS="-w" \
             -j$(nproc) Image.gz
 
-      - name: Packaging AnyKernel3
+      - name: Preparation AnyKernel3
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel
           cp kernel-src/out/arch/arm64/boot/Image.gz AnyKernel/
           
-          cat << 'EOF' > AnyKernel/anykernel.sh
+          cd AnyKernel
+          cat << 'EOF' > anykernel.sh
           properties() {
           kernel.string=ReSukiSU-Kiev-Final
           do.devicecheck=1
@@ -88,7 +78,7 @@ jobs:
           split_boot;
           flash_boot;
           EOF
-          chmod +x AnyKernel/anykernel.sh
+          chmod +x anykernel.sh
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
