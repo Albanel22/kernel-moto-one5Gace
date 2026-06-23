@@ -57,11 +57,7 @@ jobs:
         run: |
           make clean && make mrproper
           
-          # 1. Neutraliser le VDSO32 sans supprimer le dossier
-          # Cela évite l'erreur "No rule to make target"
-          echo "" > arch/arm64/kernel/vdso32/Makefile
-          
-          # 2. Isolation du lieur système
+          # Isolation du lieur système
           mkdir -p bin_host
           ln -sf /usr/bin/gcc bin_host/gcc
           ln -sf /usr/bin/g++ bin_host/g++
@@ -69,16 +65,19 @@ jobs:
           
           make ARCH=arm64 vendor/kona-perf_defconfig
           
-          # 3. Injection des options vitales
+          # 1. Injection des options vitales et désactivation du VDSO32
           echo "CONFIG_KSU=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
           echo "CONFIG_KSU_LKM=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
           echo "CONFIG_KSU_SUSFS=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
+          echo "CONFIG_VDSO32=n" >> arch/arm64/configs/vendor/kona-perf_defconfig
           
+          # 2. Appliquer la config et forcer la suppression du VDSO32 dans le fichier .config généré
           make ARCH=arm64 alldefconfig
+          sed -i 's/CONFIG_VDSO32=y/CONFIG_VDSO32=n/g' .config
           
+          # 3. Compilation
           export PATH=$(pwd)/bin_host:/opt/proton-clang/bin:$PATH
           
-          # 4. Compilation
           make -j$(nproc) ARCH=arm64 \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
@@ -90,6 +89,8 @@ jobs:
             LD=ld.lld \
             LLVM=1 \
             LLVM_IAS=1
+
+      
 
 
       - name: Upload Kernel Image
