@@ -29,42 +29,41 @@ jobs:
         run: |
           git clone --depth=1 https://github.com/kdrag0n/proton-clang /opt/proton-clang
 
-      - name: Apply Fix-Werror Manually
+      - name: Inject ReSukiSU
         run: |
-          # Suppression de Werror et des warnings stricts dans le Makefile racine
-          # Utilisation de sed pour commenter ou supprimer les lignes problématiques
-          sed -i 's/-Werror-implicit-function-declaration//g' Makefile
-          sed -i 's/-Werror//g' Makefile
-          sed -i '/call cc-option,-Werror=strict-prototypes/d' Makefile
-          sed -i '/call cc-option,-Werror=incompatible-pointer-types/d' Makefile
-          
-          # Force le retrait du Werror dans la définition de KBUILD_CFLAGS
-          # On remplace la ligne longue par une version allégée
-          sed -i 's/KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs/KBUILD_CFLAGS   := -Wall -Wundef -Wno-trigraphs/g' Makefile
-          
-          echo "Makefile patché avec succès par injection directe."
-
-      - name: Inject and Setup ReSukiSU
-        run: |
-          cat << 'EOF' > setup_resukisu.sh
+          cat << 'EOF' > setup.sh
           #!/bin/sh
           set -eu
-          DRIVER_DIR="$(pwd)/drivers"
-          DRIVER_MAKEFILE="$DRIVER_DIR/Makefile"
-          git clone https://github.com/ReSukiSU/ReSukiSU KernelSU
-          cd "$DRIVER_DIR"
-          ln -sf "$(realpath --relative-to="$DRIVER_DIR" "$(pwd)/../KernelSU/kernel")" "kernelsu"
-          grep -q "kernelsu" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "$DRIVER_MAKEFILE"
+          GKI_ROOT=$(pwd)
+          initialize_variables() {
+              if test -d "$GKI_ROOT/common/drivers"; then DRIVER_DIR="$GKI_ROOT/common/drivers";
+              elif test -d "$GKI_ROOT/drivers"; then DRIVER_DIR="$GKI_ROOT/drivers";
+              else echo '[ERROR] "drivers/" directory not found.'; exit 127; fi
+              DRIVER_MAKEFILE=$DRIVER_DIR/Makefile
+              DRIVER_KCONFIG=$DRIVER_DIR/Kconfig
+          }
+          setup_kernelsu() {
+              if [ ! -d "$GKI_ROOT/KernelSU" ]; then git clone https://github.com/ReSukiSU/ReSukiSU KernelSU; fi
+              cd "$DRIVER_DIR"
+              ln -sf "$(realpath --relative-to="$DRIVER_DIR" "$GKI_ROOT/KernelSU/kernel")" "kernelsu"
+              grep -q "kernelsu" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "$DRIVER_MAKEFILE"
+              grep -q "source \"drivers/kernelsu/Kconfig\"" "$DRIVER_KCONFIG" || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" "$DRIVER_KCONFIG"
+          }
+          initialize_variables
+          setup_kernelsu
           EOF
-          chmod +x setup_resukisu.sh
-          ./setup_resukisu.sh
+          chmod +x setup.sh
 
       - name: Build Kernel
         run: |
-          # 1. Nettoyage complet pour effacer les traces des sed précédents
+          # Nettoyage profond pour garantir un Makefile propre
+          git checkout Makefile
           make clean && make mrproper
           
-          # 2. Configuration
+          # Application de ReSukiSU
+          ./setup.sh
+          
+          # Configuration
           make ARCH=arm64 vendor/kona-perf_defconfig
           {
             echo "CONFIG_KSU=y"
@@ -75,8 +74,7 @@ jobs:
           
           make ARCH=arm64 alldefconfig
           
-          # 3. Compilation avec contournement des warnings sans modifier le Makefile
-          # On utilise KCFLAGS pour injecter les flags sans risquer de corrompre le fichier
+          # Compilation avec KCFLAGS="-w" (Méthode Ravindu modernisée)
           make -j$(nproc) ARCH=arm64 \
             CC=/opt/proton-clang/bin/clang \
             LD=/opt/proton-clang/bin/ld.lld \
@@ -84,10 +82,12 @@ jobs:
             LLVM_IAS=1 \
             HOSTCC=gcc \
             HOSTCXX=g++ \
-            KCFLAGS="-w"
+            KCFLAGS="-w" \
+            KBUILD_AFLAGS="-w"
 
       - name: Upload Kernel Image
         uses: actions/upload-artifact@v4
         with:
           name: Kernel-Image-Motorola
           path: out/arch/arm64/boot/Image.gz-dtb
+          if-no-files-found: warn
