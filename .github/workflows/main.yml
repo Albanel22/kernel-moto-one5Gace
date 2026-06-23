@@ -51,17 +51,27 @@ jobs:
         run: |
           make clean && make mrproper
           make ARCH=arm64 vendor/kona-perf_defconfig
+          make ARCH=arm64 olddefconfig
           
+          # 1. On ne met PAS Proton-Clang dans le PATH ici pour permettre 
+          # à 'make' de trouver les outils système (gcc, ld, as) pour les scripts hôtes.
+          
+          echo "[+] Compilation des outils hôtes..."
+          make -j$(nproc) ARCH=arm64 \
+            HOSTCC=gcc \
+            HOSTCXX=g++ \
+            HOSTLD=ld \
+            LLVM=1 \
+            LLVM_IAS=1
+          
+          echo "[+] Compilation du noyau avec Proton-Clang..."
+          # 2. On ajoute maintenant Proton-Clang au PATH pour la compilation du noyau
           export PATH=/opt/proton-clang/bin:$PATH
           
-          # Compilation avec séparation stricte Hôte/Cible
           make -j$(nproc) ARCH=arm64 \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
-            HOSTCC=gcc \
-            HOSTCXX=g++ \
-            HOSTLD=ld \
             LD=ld.lld \
             LLVM=1 \
             LLVM_IAS=1 \
