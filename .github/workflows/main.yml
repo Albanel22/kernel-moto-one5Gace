@@ -43,11 +43,21 @@ jobs:
           make clean && make mrproper
           make ARCH=arm64 vendor/kona-perf_defconfig
           
+          # On ajoute le dossier bin de proton-clang au PATH
           export PATH=/opt/proton-clang/bin:$PATH
+          
+          # Vérification de la présence de lld
+          which ld.lld
+          
+          # Compilation forcée avec les chemins explicites
           make -j$(nproc) ARCH=arm64 \
-            CC=clang LD=ld.lld LLVM=1 LLVM_IAS=1 \
+            CC=clang \
+            LD=ld.lld \
+            LLVM=1 \
+            LLVM_IAS=1 \
             CROSS_COMPILE=aarch64-linux-gnu- \
-            HOSTCC=gcc HOSTCXX=g++ \
+            HOSTCC=gcc \
+            HOSTCXX=g++ \
             CONFIG_KSU=y
 
       - name: Upload Kernel Image
