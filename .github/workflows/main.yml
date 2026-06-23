@@ -36,14 +36,25 @@ jobs:
           set -eu
           GKI_ROOT=$(pwd)
           DRIVER_DIR="$GKI_ROOT/drivers"
+          # Définition manquante ajoutée ici
+          DRIVER_MAKEFILE="$DRIVER_DIR/Makefile"
+          
           echo "[+] Setting up ReSukiSU..."
           git clone https://github.com/ReSukiSU/ReSukiSU KernelSU
+          
           cd "$DRIVER_DIR"
           ln -sf "$(realpath --relative-to="$DRIVER_DIR" "$GKI_ROOT/KernelSU/kernel")" "kernelsu"
-          grep -q "kernelsu" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "$DRIVER_MAKEFILE"
+          
+          # Vérification de sécurité pour éviter l'erreur si le Makefile n'existe pas
+          if [ -f "$DRIVER_MAKEFILE" ]; then
+              grep -q "kernelsu" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "$DRIVER_MAKEFILE"
+          else
+              echo "obj-\$(CONFIG_KSU) += kernelsu/" > "$DRIVER_MAKEFILE"
+          fi
           EOF
           chmod +x setup_resukisu.sh
           ./setup_resukisu.sh
+
 
       - name: Apply Fix-Werror Patch
         run: |
