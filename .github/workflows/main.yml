@@ -1,96 +1,90 @@
-name: Build ReSukiSU Kernel
+name: Build ReSukiSU Kernel - Final Kiev
 
 on:
-  push:
-    branches: [ lineage-23.2 ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Source
-        uses: actions/checkout@v4
-        with:
-          repository: 'LineageOS/android_kernel_motorola_sm8250'
-          ref: 'lineage-23.2'
-          submodules: 'recursive'
+      - name: Installation des dependances
+        run: |
+          sudo apt update && sudo apt install -y bc bison build-essential ccache flex g++-multilib gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev libtinfo6 pahole
 
-      - name: Setup Build Environment
+      - name: Setup Workspace & Toolchain
         run: |
-          sudo apt update && sudo apt install -y git device-tree-compiler lz4 xz-utils zlib1g-dev \
-            openjdk-17-jdk gcc g++ python3 python-is-python3 p7zip-full android-sdk-libsparse-utils \
-            erofs-utils default-jdk gnupg flex bison gperf build-essential zip curl libc6-dev \
-            libncurses-dev libx11-dev libreadline-dev libgl1 libgl1-mesa-dev make bc grep \
-            tofrodos python3-markdown libxml2-utils xsltproc libc6-dev libtinfo6 repo cpio \
-            kmod openssl libelf-dev pahole libssl-dev libarchive-tools zstd rsync \
-            bison flex  # Ajout explicite pour le DTC
-      
-      - name: Setup Toolchain
-        run: |
+          mkdir -p $GITHUB_WORKSPACE/kernel_workspace
           git clone --depth=1 https://github.com/kdrag0n/proton-clang /opt/proton-clang
 
-      - name: Inject ReSukiSU
+      - name: Clonage sources kernel
         run: |
-          cat << 'EOF' > setup.sh
-          #!/bin/sh
-          set -eu
-          GKI_ROOT=$(pwd)
-          initialize_variables() {
-              if test -d "$GKI_ROOT/common/drivers"; then DRIVER_DIR="$GKI_ROOT/common/drivers";
-              elif test -d "$GKI_ROOT/drivers"; then DRIVER_DIR="$GKI_ROOT/drivers";
-              else echo '[ERROR] "drivers/" directory not found.'; exit 127; fi
-              DRIVER_MAKEFILE=$DRIVER_DIR/Makefile
-              DRIVER_KCONFIG=$DRIVER_DIR/Kconfig
-          }
-          setup_kernelsu() {
-              if [ ! -d "$GKI_ROOT/KernelSU" ]; then git clone https://github.com/ReSukiSU/ReSukiSU KernelSU; fi
-              cd "$DRIVER_DIR"
-              ln -sf "$(realpath --relative-to="$DRIVER_DIR" "$GKI_ROOT/KernelSU/kernel")" "kernelsu"
-              grep -q "kernelsu" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "$DRIVER_MAKEFILE"
-              grep -q "source \"drivers/kernelsu/Kconfig\"" "$DRIVER_KCONFIG" || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" "$DRIVER_KCONFIG"
-          }
-          initialize_variables
-          setup_kernelsu
-          EOF
-          chmod +x setup.sh
+          git clone --depth=1 https://github.com/LineageOS/android_kernel_motorola_sm8250.git -b lineage-23.2 $GITHUB_WORKSPACE/kernel_workspace/kernel-src
 
-      - name: Build Kernel
+      - name: Injection ReSukiSU
         run: |
-          git checkout Makefile
-          make clean && make mrproper
+          cd $GITHUB_WORKSPACE/kernel_workspace/kernel-src
+          git clone https://github.com/ReSukiSU/ReSukiSU KernelSU
+          # Installation propre via le script officiel
+          cd KernelSU
+          git checkout main
+          cd ..
+          # Création du lien et modification du makefile pour Kiev
+          mkdir -p drivers/kernelsu
+          ln -sf "$(pwd)/KernelSU/kernel/"* drivers/kernelsu/
+          echo "obj-\$(CONFIG_KSU) += kernelsu/" >> drivers/Makefile
+
+      - name: Configuration Materielle et Build
+        run: |
+          cd $GITHUB_WORKSPACE/kernel_workspace/kernel-src
           
-          # Application de ReSukiSU
-          ./setup.sh
+          # Configuration Kiev
+          [ -f arch/arm64/configs/vendor/kiev_defconfig ] && DEFCONFIG="vendor/kiev_defconfig" || DEFCONFIG="vendor/lito-perf_defconfig"
           
-          # Configuration
-          make ARCH=arm64 vendor/kona-perf_defconfig
+          # Application des options de Root et Désactivation des protections "faisant figer le logo"
           {
             echo "CONFIG_KSU=y"
-            echo "CONFIG_KSU_LKM=y"
             echo "CONFIG_KSU_SUSFS=y"
-            echo "CONFIG_VDSO32=n"
-            echo "CONFIG_COMPAT=n"
-          } >> arch/arm64/configs/vendor/kona-perf_defconfig
+            echo "CONFIG_KPROBES=y"
+            echo "CONFIG_HAVE_KPROBES=y"
+            echo "CONFIG_KPROBE_EVENTS=y"
+            echo "# CONFIG_CFI_CLANG is not set"
+            echo "# CONFIG_CC_WERROR is not set"
+          } >> arch/arm64/configs/$DEFCONFIG
           
-          make ARCH=arm64 alldefconfig
-          
-          # Compilation forcée avec contournement des erreurs de scripts
-          make -j$(nproc) ARCH=arm64 \
-            CC=/opt/proton-clang/bin/clang \
-            LD=/opt/proton-clang/bin/ld.lld \
-            LLVM=1 \
-            LLVM_IAS=1 \
-            HOSTCC=gcc \
-            HOSTCXX=g++ \
-            KCFLAGS="-w" \
-            KBUILD_AFLAGS="-w" \
+          # Compilation
+          export PATH="/opt/proton-clang/bin:$PATH"
+          make O=out ARCH=arm64 $DEFCONFIG
+          make O=out ARCH=arm64 \
+            CC=clang LD=ld.lld LLVM=1 LLVM_IAS=1 \
+            KCFLAGS="-w" KBUILD_AFLAGS="-w" \
             HOSTCFLAGS="-w -fcommon" \
-            DISABLE_LTO=1
+            -j$(nproc) Image.gz
 
-      - name: Upload Kernel Image
+      - name: Packaging AnyKernel3
+        run: |
+          cd $GITHUB_WORKSPACE/kernel_workspace
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel
+          cp kernel-src/out/arch/arm64/boot/Image.gz AnyKernel/
+          
+          cat << 'EOF' > AnyKernel/anykernel.sh
+          properties() {
+          kernel.string=ReSukiSU-Kiev-Final
+          do.devicecheck=1
+          device.name1=kiev
+          do.modules=0
+          do.systemless=1
+          do.cleanup=1
+          }
+          block=/dev/block/by-name/boot;
+          is_slot_device=auto;
+          . tools/ak3-core.sh;
+          split_boot;
+          flash_boot;
+          EOF
+          chmod +x AnyKernel/anykernel.sh
+
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-Image-Motorola
-          path: out/arch/arm64/boot/Image.gz-dtb
-          if-no-files-found: warn
+          name: ReSukiSU-Kernel-Kiev
+          path: kernel_workspace/AnyKernel/*
