@@ -1,4 +1,4 @@
-name: Build ReSukiSU Kernel
+make: Build ReSukiSU Kernel
 
 on:
   push:
@@ -73,7 +73,10 @@ jobs:
           echo "CONFIG_KSU_LKM=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
           echo "CONFIG_KSU_SUSFS=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
           
+          # Remplace 'make alldefconfig' par ceci pour forcer la vérification :
           make ARCH=arm64 alldefconfig
+          make ARCH=arm64 olddefconfig || make ARCH=arm64 menuconfig
+
           
           export PATH=$(pwd)/bin_host:/opt/proton-clang/bin:$PATH
           
