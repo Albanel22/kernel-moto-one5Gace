@@ -33,32 +33,31 @@ jobs:
           ln -sf "$(pwd)/KernelSU/kernel/"* drivers/kernelsu/
           echo "obj-\$(CONFIG_KSU) += kernelsu/" >> drivers/Makefile
 
-      - name: Configuration Materielle et Build
+      - name: Build Kernel
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/kernel-src
           
-          # Configuration Kiev
+          # 1. Nettoyage TOTAL pour éviter la pollution d'il y a 7 jours
+          make mrproper
+          rm -rf out
+          
+          # 2. Setup Toolchain (Ton ancienne méthode)
+          # On définit le chemin vers clang
+          CLANG_BIN=/opt/proton-clang/bin
+          export PATH="$CLANG_BIN:$PATH"
+          
+          # 3. Configuration
           [ -f arch/arm64/configs/vendor/kiev_defconfig ] && DEFCONFIG="vendor/kiev_defconfig" || DEFCONFIG="vendor/lito-perf_defconfig"
-          
-          # Application des options de Root et Désactivation des protections "faisant figer le logo"
-          {
-            echo "CONFIG_KSU=y"
-            echo "CONFIG_KSU_SUSFS=y"
-            echo "CONFIG_KPROBES=y"
-            echo "CONFIG_HAVE_KPROBES=y"
-            echo "CONFIG_KPROBE_EVENTS=y"
-            echo "# CONFIG_CFI_CLANG is not set"
-            echo "# CONFIG_CC_WERROR is not set"
-          } >> arch/arm64/configs/$DEFCONFIG
-          
-          # Compilation
-          export PATH="/opt/proton-clang/bin:$PATH"
           make O=out ARCH=arm64 $DEFCONFIG
+          
+          # 4. Compilation (Logique identique à ton build réussi)
+          # On laisse le PATH diriger les outils, tout en précisant LLVM=1
           make O=out ARCH=arm64 \
-            CC=clang LD=ld.lld LLVM=1 LLVM_IAS=1 \
-            KCFLAGS="-w" KBUILD_AFLAGS="-w" \
-            HOSTCFLAGS="-w -fcommon" \
+            LLVM=1 LLVM_IAS=1 \
+            KCFLAGS="-w" \
+            KBUILD_AFLAGS="-w" \
             -j$(nproc) Image.gz
+
 
       - name: Packaging AnyKernel3
         run: |
