@@ -16,6 +16,18 @@ jobs:
           ref: 'lineage-23.2'
           submodules: 'recursive'
 
+      - name: Setup Build Environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential ccache curl flex g++-aarch64-linux-gnu \
+            gcc-aarch64-linux-gnu git gnupg gperf imagemagick libelf-dev liblz4-tool libncurses-dev \
+            libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc \
+            zip zlib1g-dev libc6-dev-i386 lib32ncurses-dev lld
+
+      - name: Setup Toolchain
+        run: |
+          git clone --depth=1 https://github.com/kdrag0n/proton-clang /opt/proton-clang
+
       - name: Inject and Setup ReSukiSU
         run: |
           # Création du script d'intégration à la volée
@@ -34,7 +46,6 @@ jobs:
           grep -q "source \"drivers/kernelsu/Kconfig\"" "$DRIVER_KCONFIG" || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" "$DRIVER_KCONFIG"
           EOF
           
-          # Exécution du script
           chmod +x setup_resukisu.sh
           ./setup_resukisu.sh
 
@@ -43,16 +54,13 @@ jobs:
           make clean && make mrproper
           make ARCH=arm64 vendor/kona-perf_defconfig
           
-          # On ajoute le dossier bin de proton-clang au PATH
           export PATH=/opt/proton-clang/bin:$PATH
+          # On force l'utilisation du lld système installé précédemment
+          export LD=$(which lld)
           
-          # Vérification de la présence de lld
-          which ld.lld
-          
-          # Compilation forcée avec les chemins explicites
           make -j$(nproc) ARCH=arm64 \
             CC=clang \
-            LD=ld.lld \
+            LD=$LD \
             LLVM=1 \
             LLVM_IAS=1 \
             CROSS_COMPILE=aarch64-linux-gnu- \
