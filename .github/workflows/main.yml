@@ -45,27 +45,27 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/kernel-src
           
-          # 1. Nettoyage TOTAL pour éviter la pollution d'il y a 7 jours
+          # Nettoyage
           make mrproper
           rm -rf out
           
-          # 2. Setup Toolchain (Ton ancienne méthode)
-          # On définit le chemin vers clang
+          # Setup Toolchain
           CLANG_BIN=/opt/proton-clang/bin
           export PATH="$CLANG_BIN:$PATH"
           
-          # 3. Configuration
+          # Configuration
           [ -f arch/arm64/configs/vendor/kiev_defconfig ] && DEFCONFIG="vendor/kiev_defconfig" || DEFCONFIG="vendor/lito-perf_defconfig"
           make O=out ARCH=arm64 $DEFCONFIG
           
-          # 4. Compilation (Logique identique à ton build réussi)
-          # On laisse le PATH diriger les outils, tout en précisant LLVM=1
+          # COMPILATION FORCÉE : 
+          # On définit HOSTCC et HOSTLD pour pointer vers les outils système, 
+          # même si le PATH contient proton-clang.
           make O=out ARCH=arm64 \
             LLVM=1 LLVM_IAS=1 \
-            KCFLAGS="-w" \
-            KBUILD_AFLAGS="-w" \
+            HOSTCC=gcc \
+            HOSTLD=ld \
+            KCFLAGS="-w" KBUILD_AFLAGS="-w" \
             -j$(nproc) Image.gz
-
 
       - name: Packaging AnyKernel3
         run: |
