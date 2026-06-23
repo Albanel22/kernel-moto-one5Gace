@@ -18,11 +18,12 @@ jobs:
 
       - name: Setup Build Environment
         run: |
-          sudo apt-get update
-          sudo apt-get install -y bc bison build-essential ccache curl flex g++-aarch64-linux-gnu \
-            gcc-aarch64-linux-gnu git gnupg gperf imagemagick libelf-dev liblz4-tool libncurses-dev \
-            libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc \
-            zip zlib1g-dev libc6-dev-i386 lib32ncurses-dev lld libfl-dev libbison-dev
+          sudo apt update && sudo apt install -y git device-tree-compiler lz4 xz-utils zlib1g-dev \
+            openjdk-17-jdk gcc g++ python3 python-is-python3 p7zip-full android-sdk-libsparse-utils \
+            erofs-utils default-jdk gnupg flex bison gperf build-essential zip curl libc6-dev \
+            libncurses-dev libx11-dev libreadline-dev libgl1 libgl1-mesa-dev make bc grep \
+            tofrodos python3-markdown libxml2-utils xsltproc libc6-dev libtinfo6 repo cpio \
+            kmod openssl libelf-dev pahole libssl-dev libarchive-tools zstd rsync
 
       - name: Setup Toolchain
         run: |
@@ -34,17 +35,14 @@ jobs:
           #!/bin/sh
           set -eu
           GKI_ROOT=$(pwd)
-          if test -d "$GKI_ROOT/common/drivers"; then DRIVER_DIR="$GKI_ROOT/common/drivers"; else DRIVER_DIR="$GKI_ROOT/drivers"; fi
+          # Detection du bon repertoire drivers (standard sur Motorola sm8250)
+          DRIVER_DIR="$GKI_ROOT/drivers"
           DRIVER_MAKEFILE="$DRIVER_DIR/Makefile"
           DRIVER_KCONFIG="$DRIVER_DIR/Kconfig"
           
           echo "[+] Setting up ReSukiSU..."
           git clone https://github.com/ReSukiSU/ReSukiSU KernelSU
           
-          # Force le mode compatible Non-GKI
-          sed -i 's/CONFIG_KSU_TP_REDIRECT=y/CONFIG_KSU_TP_REDIRECT=n/g' "$GKI_ROOT/KernelSU/kernel/Makefile" 2>/dev/null || true
-          
-          # Intégration
           cd "$DRIVER_DIR"
           ln -sf "$(realpath --relative-to="$DRIVER_DIR" "$GKI_ROOT/KernelSU/kernel")" "kernelsu"
           grep -q "kernelsu" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "$DRIVER_MAKEFILE"
@@ -57,29 +55,23 @@ jobs:
         run: |
           make clean && make mrproper
           
-          # 1. Neutraliser l'appel au VDSO32 dans le Makefile principal
-          # On commente la ligne qui inclut le dossier vdso32
-          sed -i 's/core-$(CONFIG_VDSO32) += arch\/arm64\/kernel\/vdso32\///g' arch/arm64/Makefile
-          
-          # 2. Isolation du lieur système
-          mkdir -p bin_host
-          ln -sf /usr/bin/gcc bin_host/gcc
-          ln -sf /usr/bin/g++ bin_host/g++
-          ln -sf /usr/bin/ld bin_host/ld
-          
+          # Configuration specifique Motorola
           make ARCH=arm64 vendor/kona-perf_defconfig
           
-          # 3. Injection des options vitales
-          echo "CONFIG_KSU=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
-          echo "CONFIG_KSU_LKM=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
-          echo "CONFIG_KSU_SUSFS=y" >> arch/arm64/configs/vendor/kona-perf_defconfig
-          echo "CONFIG_VDSO32=n" >> arch/arm64/configs/vendor/kona-perf_defconfig
+          # Injection des options vitales (KSU + VDSO32 off)
+          {
+            echo "CONFIG_KSU=y"
+            echo "CONFIG_KSU_LKM=y"
+            echo "CONFIG_KSU_SUSFS=y"
+            echo "CONFIG_VDSO32=n"
+          } >> arch/arm64/configs/vendor/kona-perf_defconfig
           
           make ARCH=arm64 alldefconfig
           
-          export PATH=$(pwd)/bin_host:/opt/proton-clang/bin:$PATH
+          # Export du path pour Proton-Clang
+          export PATH=/opt/proton-clang/bin:$PATH
           
-          # 4. Compilation
+          # Compilation
           make -j$(nproc) ARCH=arm64 \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
@@ -87,15 +79,12 @@ jobs:
             HOSTCC=gcc \
             HOSTCXX=g++ \
             HOSTLD=ld \
-            KBUILD_HOSTLD=/usr/bin/ld \
-            LD=ld.lld \
             LLVM=1 \
             LLVM_IAS=1
-  
 
       - name: Upload Kernel Image
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel-Image-Kiev
+          name: Kernel-Image-Motorola
           path: out/arch/arm64/boot/Image.gz-dtb
           if-no-files-found: warn
