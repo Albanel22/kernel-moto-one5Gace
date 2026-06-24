@@ -59,10 +59,10 @@ jobs:
           cp "$KERNEL_PATCH_PATH" ./kernel_susfs.patch
           cp "$KSU_PATCH_PATH" ./KernelSU/ksu_susfs.patch
           
-          # 4. Application des patchs de base
-          patch -p1 --ignore-whitespace < kernel_susfs.patch || echo "Ajustements manuels requis requis pour LineageOS VFS."
+          # 4. Application des patchs de base en mode non-interactif
+          patch -p1 --ignore-whitespace --fuzz=3 < kernel_susfs.patch || true
           cd KernelSU
-          patch -p1 --ignore-whitespace < ksu_susfs.patch || echo "Patch ReSukiSU appliqué."
+          patch -p1 --ignore-whitespace --fuzz=3 < ksu_susfs.patch || true
           
           # Verrouillage des sous-systèmes RCU requis par SUSFS
           git checkout kernel/Kconfig
@@ -80,10 +80,10 @@ jobs:
           sed -i '/struct vfsmount {/a \	int susfs_mnt_id_backup;' include/linux/mount.h
 
           # Correctif C : Injecter les macros SUSFS manquantes et les structures IDA au sommet de fs/namespace.c
-          sed -i '1s/^/#define DEFAULT_SUS_MNT_ID 1000000\n#define DEFAULT_SUS_MNT_GROUP_ID 1000000\n#define DEFAULT_SUS_MNT_ID_FOR_KSU_PROC_UNSHARE 2000000\n#define CL_COPY_MNT_NS 0x40\n#define CL_ZYGOTE_COPY_MNT_NS 0x80\n#include <linux/ida.h>\nstruct ida susfs_mnt_id_ida;\nstruct ida susfs_mnt_group_ida;\n/' fs/namespace.c
+          sed -i '1s/^/#define DEFAULT_SUS_MNT_ID 1000000\n#define DEFAULT_SUS_MNT_GROUP_ID 1000000\n#define DEFAULT_SUS_MNT_ID_FOR_KSU_PROC_UNSHARE 2000000\n#define CL_COPY_MNT_NS 0x40\n#define CL_ZYGOTE_COPY_MNT_NS 0x80\n#include <linux/ida.h>\nextern struct ida susfs_mnt_id_ida;\nextern struct ida susfs_mnt_group_ida;\n/' fs/namespace.c
 
-          # Correctif D : Réparation des appels de fonction obsolètes (Met à jour alloc_vfsmnt avec ses nouveaux arguments requis)
-          sed -i 's/alloc_vfsmnt(\([^,)]*\))/alloc_vfsmnt(\1, false, 0)/g' fs/namespace.c
+          # Correctif D : Réparation des appels (Utilisation sécurisée du délimiteur # pour sed)
+          sed -i 's#alloc_vfsmnt(\([^,)]*\))#alloc_vfsmnt(\1, false, 0)#g' fs/namespace.c
 
           # Correctif E : Sécurité anti-rejet pour la variable d'état d'indexation (fs.h)
           if ! grep -q "INODE_STATE_SUS_KSTAT" include/linux/fs.h; then
