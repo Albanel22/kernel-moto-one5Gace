@@ -37,32 +37,30 @@ jobs:
       - name: Compilation du Noyau pour Moto Kiev
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/kernel-src        
-          CLANG_BIN=$(dirname $(find $GITHUB_WORKSPACE/kernel_workspace/clang -name clang -type f | head -n 1))
           
-          # 1. Configurer les variables pour le build
+          # Chemin direct défini manuellement
+          CLANG_BIN="$GITHUB_WORKSPACE/kernel_workspace/clang/bin"
           export PATH="$CLANG_BIN:$PATH"
           export ARCH=arm64
           export SUBARCH=arm64
           
-          # 2. Forcer GCC pour les outils hôtes (fixdep, kconfig) afin d'éviter le conflit avec la libc système
+          # Forcer GCC pour les outils hôtes (fixdep, kconfig)
           export HOSTCC=gcc
           export HOSTLD=ld
           export HOSTAR=ar
           
-          # 3. Compilation avec répertoire de sortie 'out'
-          # On définit les variables pour le linker et le compilateur
+          echo "Dossier Clang utilisé : $CLANG_BIN"
+          
+          # Compilation
           make O=out ARCH=arm64 \
             CC=clang \
-            LD=ld.lld \
             LLVM=1 LLVM_IAS=1 \
             kiev_defconfig
             
           LTO=thin make O=out ARCH=arm64 \
             CC=clang \
-            LD=ld.lld \
             LLVM=1 LLVM_IAS=1 \
             -j$(nproc) Image.gz
-
 
       - name: Preparation AnyKernel3
         run: |
