@@ -41,10 +41,23 @@ jobs:
           # 1. Injection de ReSukiSU (Kernel-level Root depuis ton lien GitHub)
           curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s main
           
-          # 2. Recherche dynamique des fichiers de patch SUSFS
+          # 2. Affichage préventif de la structure pour le débogage en cas de pépin
+          echo "=== Structure du dépôt SUSFS ==="
+          ls -R ../susfs-source/
+          echo "================================"
+          
+          # 3. Recherche ultra-souple et insensible à la casse
           echo "Localisation des patchs SUSFS..."
-          KERNEL_PATCH_PATH=$(find ../susfs-source/ -name "*add_susfs_in_kernel-4.19*.patch" | head -n 1)
-          KSU_PATCH_PATH=$(find ../susfs-source/ -name "*add_susfs_to_ksu*.patch" | head -n 1)
+          KERNEL_PATCH_PATH=$(find ../susfs-source/ -iname "*susfs*4.19*.patch" | head -n 1)
+          
+          # Test de plusieurs variantes d'écriture pour le patch KernelSU
+          KSU_PATCH_PATH=$(find ../susfs-source/ -iname "*susfs*to*ksu*.patch" | head -n 1)
+          if [ -z "$KSU_PATCH_PATH" ]; then
+            KSU_PATCH_PATH=$(find ../susfs-source/ -iname "*susfs*ksu*.patch" | head -n 1)
+          fi
+          if [ -z "$KSU_PATCH_PATH" ]; then
+            KSU_PATCH_PATH=$(find ../susfs-source/ -iname "*susfs*kernelsu*.patch" | head -n 1)
+          fi
           
           if [ -z "$KERNEL_PATCH_PATH" ] || [ -z "$KSU_PATCH_PATH" ]; then
             echo "Erreur critique : Impossible de trouver les patchs SUSFS requis."
@@ -57,14 +70,14 @@ jobs:
           cp "$KERNEL_PATCH_PATH" ./kernel_susfs.patch
           cp "$KSU_PATCH_PATH" ./KernelSU/ksu_susfs.patch
           
-          # 3. Application des patchs
+          # 4. Application des patchs
           patch -p1 < kernel_susfs.patch || echo "Patch noyau appliqué avec des lignes ignorées (sans gravité)"
           
           cd KernelSU
           patch -p1 < ksu_susfs.patch || echo "Patch ReSukiSU appliqué"
           cd ..
 
-          # 4. Activation des options requises dans la configuration de votre Motorola (kiev)
+          # 5. Activation des options requises dans la configuration de votre Motorola (kiev)
           echo "CONFIG_KSU=y" >> arch/arm64/configs/${{ env.KERNEL_CONFIG }}
           echo "CONFIG_KSU_SUSFS=y" >> arch/arm64/configs/${{ env.KERNEL_CONFIG }}
           echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> arch/arm64/configs/${{ env.KERNEL_CONFIG }}
