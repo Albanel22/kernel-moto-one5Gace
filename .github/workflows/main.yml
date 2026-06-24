@@ -23,7 +23,7 @@ jobs:
         run: |
           mkdir clang
           cd clang
-          curl -LO https://googlesource.com
+          curl -LO https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r522817.tar.gz
           tar -xf clang-r522817.tar.gz
           echo "$(pwd)/bin" >> $GITHUB_PATH
 
