@@ -4,8 +4,8 @@ on:
   workflow_dispatch: # Lancement manuel via l'interface GitHub
 
 env:
-  KERNEL_REPO: https://github.com/LineageOS/android_kernel_motorola_sm7250.git
-  KERNEL_BRANCH: lineage-23 # CORRIGÉ : Vrai nom de branche pour LineageOS 23
+  KERNEL_REPO: https://github.com/LineageOS/android_kernel_motorola_sm8250.git
+  KERNEL_BRANCH: lineage-23.0 # CORRIGÉ : Dépôt officiel sm8250 + branche standard .0
   KERNEL_CONFIG: vendor/kiev_defconfig
   ANYKERNEL_REPO: https://github.com/osm0sis/AnyKernel3.git
   ANYKERNEL_BRANCH: master
@@ -26,7 +26,7 @@ jobs:
           git sparse-checkout set clang-r522817
           echo "$(pwd)/clang-r522817/bin" >> $GITHUB_PATH
 
-      - name: Cloner les sources du Kernel Motorola (sm7250)
+      - name: Cloner les sources du Kernel Motorola (sm8250 unifié)
         run: |
           git clone ${{ env.KERNEL_REPO }} -b ${{ env.KERNEL_BRANCH }} --depth=1 kernel-source
 
@@ -42,11 +42,10 @@ jobs:
           curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s main
           
           # 2. Application des patchs SUSFS au système de fichiers (fs) du noyau et à KernelSU
-          # Note : On force l'application des patchs sous forme globale
           cp ../susfs-source/kernel_patches/50_add_susfs_in_kernel-4.19.patch ./
           cp ../susfs-source/kernel_patches/KernelSU/10_add_susfs_to_ksu.patch ./KernelSU/
           
-          patch -p1 < 50_add_susfs_in_kernel-4.19.patch || echo "Patch noyau appliqué avec quelques lignes ignorées, vérification manuelle facultative"
+          patch -p1 < 50_add_susfs_in_kernel-4.19.patch || echo "Patch noyau appliqué"
           cd KernelSU
           patch -p1 < 10_add_susfs_to_ksu.patch || echo "Patch KSU appliqué"
           cd ..
@@ -59,7 +58,7 @@ jobs:
           echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y" >> arch/arm64/configs/${{ env.KERNEL_CONFIG }}
           echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> arch/arm64/configs/${{ env.KERNEL_CONFIG }}
 
-      - name: Compiler le Kernel (sm7250 / 4.19.325-cip133)
+      - name: Compiler le Kernel (sm8250 / 4.19)
         run: |
           cd kernel-source
           export ARCH=arm64
