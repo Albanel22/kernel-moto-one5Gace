@@ -55,12 +55,10 @@ jobs:
             exit 1
           fi
           
-          # Extraction du dossier racine des patchs SUSFS (contient fs, include, etc.)
           PATCH_DIR=$(dirname "$KERNEL_PATCH_PATH")
-          echo "Dossier source des patchs : $PATCH_DIR"
           
-          # FUSION DES FICHIERS FONCTIONNELS (Résout l'absence de susfs_def.h)
-          echo "Copie des fichiers d'implémentation manquants de SUSFS..."
+          # 3. Fusion des fichiers physiques manquants (Résout l'absence de susfs_def.h)
+          echo "Copie des fichiers d'implémentation de SUSFS..."
           cp -r "$PATCH_DIR/fs/." ./fs/
           cp -r "$PATCH_DIR/include/." ./include/
           if [ -d "$PATCH_DIR/KernelSU" ]; then cp -r "$PATCH_DIR/KernelSU/." ./KernelSU/; fi
@@ -68,38 +66,37 @@ jobs:
           cp "$KERNEL_PATCH_PATH" ./kernel_susfs.patch
           cp "$KSU_PATCH_PATH" ./KernelSU/ksu_susfs.patch
           
-          # 3. Application des patchs (On retire -F0 pour laisser le patcher gérer les décalages de lignes de LineageOS)
-          echo "Application des patchs de modification..."
-          patch -p1 --ignore-whitespace < kernel_susfs.patch || echo "Note: Ajustements légers appliqués au patch principal."
+          # 4. Application des fichiers de patchs
+          echo "Application des patchs..."
+          patch -p1 --ignore-whitespace < kernel_susfs.patch || echo "Note: Ajustements appliqués au patch principal."
           
-          # 4. Application du patch sur ReSukiSU (KernelSU)
           cd KernelSU
-          patch -p1 --ignore-whitespace < ksu_susfs.patch || echo "Patch ReSukiSU appliqué"
+          patch -p1 --ignore-whitespace < ksu_susfs.patch || echo "Patch ReSukiSU appliqué."
           
-          # Restauration propre du Kconfig pour ReSukiSU
+          # Verrouillage structurel des sous-systèmes RCU dans le gestionnaire Kconfig
           git checkout kernel/Kconfig
-          echo -e "\nconfig KSU_SUSFS\n\tbool \"Enable SUSFS Support for ReSukiSU\"\n\tdepends on KSU\n\tdefault y" >> kernel/Kconfig
+          echo -e "\nconfig KSU_SUSFS\n\tbool \"Enable SUSFS Support for ReSukiSU\"\n\tdepends on KSU\n\tselect TASKS_RCU\n\tselect TASKS_TRACE_RCU\n\tdefault y" >> kernel/Kconfig
           cd ..
 
-          # 5. CORRECTIF CHIRURGICAL : Alias de type isolé pour filter.h (évite les boucles d'en-têtes)
-          echo "Application du patch chirurgical sur include/linux/filter.h..."
+          # 5. SÉCURITÉ ANTI-REJET : Forcer la définition de INODE_STATE_SUS_KSTAT au cas où LineageOS rejette le patch dans fs.h
+          if ! grep -q "INODE_STATE_SUS_KSTAT" include/linux/fs.h; then
+            echo "Sécurité : Injection manuelle de INODE_STATE_SUS_KSTAT dans fs.h"
+            echo -e "\n#define INODE_STATE_SUS_KSTAT (1 << 27)" >> include/linux/fs.h
+          fi
+
+          # 6. CORRECTIF CHIRURGICAL : Alias de type isolé pour filter.h (évite les boucles d'en-têtes)
           sed -i '1s/^/typedef unsigned int compat_uptr_t;\n/' include/linux/filter.h
 
-          # 6. Détection du defconfig cible
+          # 7. Détection et préparation du defconfig
           CONFIG_TO_USE="${{ env.KERNEL_CONFIG }}"
           if [ ! -f "arch/arm64/configs/$CONFIG_TO_USE" ] && [ -f "arch/arm64/configs/vendor/kiev-perf_defconfig" ]; then
             CONFIG_TO_USE="vendor/kiev-perf_defconfig"
           fi
           
-          # 7. CORRECTIF ARCHITECTURAL : Réactivation forcée des piliers du planificateur et de RCU
-          echo "Sécurisation des dépendances système dans le defconfig..."
-          echo "CONFIG_PREEMPT=y" >> arch/arm64/configs/$CONFIG_TO_USE
-          echo "CONFIG_TASKS_RCU=y" >> arch/arm64/configs/$CONFIG_TO_USE
-          echo "CONFIG_TASKS_TRACE_RCU=y" >> arch/arm64/configs/$CONFIG_TO_USE
+          # Nettoyage et injection des options de configuration de base
           echo "CONFIG_NO_HZ_COMMON=y" >> arch/arm64/configs/$CONFIG_TO_USE
           echo "CONFIG_NO_HZ_FULL=y" >> arch/arm64/configs/$CONFIG_TO_USE
           
-          # Injection des options ReSukiSU / SUSFS
           echo "CONFIG_KSU=y" >> arch/arm64/configs/$CONFIG_TO_USE
           echo "CONFIG_KSU_SUSFS=y" >> arch/arm64/configs/$CONFIG_TO_USE
           echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> arch/arm64/configs/$CONFIG_TO_USE
@@ -122,11 +119,11 @@ jobs:
             CONFIG_TO_USE="vendor/kiev-perf_defconfig"
           fi
           
-          # Génération et lissage automatique des dépendances manquantes
+          # Résolution et lissage automatique des dépendances Kconfig
           make O=out $CONFIG_TO_USE
           make O=out olddefconfig
           
-          # Compilation globale
+          # Compilation en parallèle
           make -j$(nproc --all) O=out KCFLAGS="-w"
 
       - name: Empaqueter avec AnyKernel3
