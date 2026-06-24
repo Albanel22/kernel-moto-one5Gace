@@ -34,25 +34,39 @@ jobs:
             fi
           fi
 
-      - name: Compilation du Noyau pour Moto Kiev
+        - name: Compilation du Noyau pour Moto Kiev
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/kernel-src        
           
-          # On définit le chemin vers le dossier 'bin' de la toolchain Google
-          # Dans la toolchain prebuilts/clang/host/linux-x86, le binaire est dans 'bin'
-          export PATH="$GITHUB_WORKSPACE/kernel_workspace/clang/bin:$PATH"
-          
+          # 1. Préparation des chemins
+          CLANG_BIN="$GITHUB_WORKSPACE/kernel_workspace/clang/bin"
+          export PATH="$CLANG_BIN:$PATH"
           export ARCH=arm64
           export SUBARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
-          export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
           
-          echo "Path défini sur : $PATH"
+          # 2. STRATÉGIE DE FORCAGE :
+          # On définit HOSTCC et HOSTLD pour forcer GCC/LD système sur les outils
+          # On s'assure qu'ils ne sont pas écrasés par LLVM
+          export HOSTCC=gcc
+          export HOSTLD=ld
           
-          # Compilation
-          ls -R $GITHUB_WORKSPACE/kernel_workspace/clang/bin | head -n 20
-          make O=out LLVM=1 LLVM_IAS=1 kiev_defconfig
-          LTO=thin make O=out LLVM=1 LLVM_IAS=1 -j$(nproc) Image.gz
+          echo "--- Contenu du dossier clang/bin ---"
+          ls -F $CLANG_BIN | head -n 20
+          
+          echo "--- Début de la compilation ---"
+          
+          # 3. Compilation en deux temps
+          # Etape A: Configurer sans LLVM=1 pour générer les outils 'scripts' avec GCC
+          make O=out ARCH=arm64 kiev_defconfig
+          
+          # Etape B: Compiler le noyau avec LLVM=1
+          # On passe CC et LD explicitement pour aider le Makefile
+          make O=out ARCH=arm64 \
+            CC=clang \
+            LD=ld.lld \
+            LLVM=1 LLVM_IAS=1 \
+            -j$(nproc) Image.gz
 
       - name: Preparation AnyKernel3
         run: |
