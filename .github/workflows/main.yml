@@ -38,35 +38,37 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/kernel-src        
           
-          # 1. Préparation des chemins
+          # 1. Nettoyage TOTAL des variables d'environnement de linkage
+          # Cela empêche le linker système d'être confus par des chemins d'autres toolchains
+          unset LDFLAGS
+          unset LD_LIBRARY_PATH
+          unset LD
+          
+          # 2. Préparation des chemins
           CLANG_BIN="$GITHUB_WORKSPACE/kernel_workspace/clang/bin"
           export PATH="$CLANG_BIN:$PATH"
           export ARCH=arm64
           export SUBARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           
-          # 2. STRATÉGIE DE FORCAGE :
-          # On définit HOSTCC et HOSTLD pour forcer GCC/LD système sur les outils
-          # On s'assure qu'ils ne sont pas écrasés par LLVM
+          # 3. Forçage explicite de GCC
           export HOSTCC=gcc
           export HOSTLD=ld
-          
-          echo "--- Contenu du dossier clang/bin ---"
-          ls -F $CLANG_BIN | head -n 20
+          export HOSTAR=ar
+          export HOSTCXX=g++
           
           echo "--- Début de la compilation ---"
           
-          # 3. Compilation en deux temps
-          # Etape A: Configurer sans LLVM=1 pour générer les outils 'scripts' avec GCC
+          # 4. Compilation en deux temps
           make O=out ARCH=arm64 kiev_defconfig
           
-          # Etape B: Compiler le noyau avec LLVM=1
-          # On passe CC et LD explicitement pour aider le Makefile
           make O=out ARCH=arm64 \
             CC=clang \
-            LD=ld.lld \
+            HOSTCC=gcc \
             LLVM=1 LLVM_IAS=1 \
             -j$(nproc) Image.gz
+
+      
 
       - name: Preparation AnyKernel3
         run: |
