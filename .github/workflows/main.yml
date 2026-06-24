@@ -46,8 +46,8 @@ jobs:
           # Fix A : Initialiser la variable de temps Motorola manquante
           sed -i '/#include/a \int alarm_debug = 0;' kernel/time/alarmtimer.c
 
-          # Fix B : Résoudre l'absence de type 'compat_uptr_t' dans filter.h
-          sed -i '1s/^/#include <linux/compat.h>\n/' include/linux/filter.h
+          # Fix B : Résoudre l'absence de type 'compat_uptr_t' dans filter.h (Délimiteur '#' sécurisé)
+          sed -i '1s#^##include <linux/compat.h>\n#' include/linux/filter.h
 
           # =====================================================================
 
@@ -96,3 +96,5 @@ jobs:
         with:
           name: ReSukiSU-Kernel-Kiev-AnyKernel3
           path: ReSukiSU-Kernel-Kiev.zip
+
+  
