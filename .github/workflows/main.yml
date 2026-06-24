@@ -65,16 +65,16 @@ jobs:
           cd KernelSU
           patch -p1 < ksu_susfs.patch || echo "Patch ReSukiSU appliqué"
           
-          # Restauration propre du Kconfig pour ReSukiSU
+          # Restauration propre du Kconfig pour ReSukiSU (Bypass de la dépendance récursive)
           git checkout kernel/Kconfig
           echo -e "\nconfig KSU_SUSFS\n\tbool \"Enable SUSFS Support for ReSukiSU\"\n\tdepends on KSU\n\tdefault y" >> kernel/Kconfig
           cd ..
 
-          # CORRECTION TECHNIQUE : Injection de l'en-tête manquante pour éviter l'erreur compat_uptr_t
-          echo "Correctif du fichier include/linux/filter.h..."
-          sed -i '1s/^/#include <linux\/compat.h>\n/' include/linux/filter.h
+          # 5. CORRECTIF CHIRURGICAL : On injecte uniquement le type manquant sans casser la hiérarchie des en-têtes
+          echo "Application du patch chirurgical sur include/linux/filter.h..."
+          sed -i '1s/^/typedef unsigned int compat_uptr_t;\n/' include/linux/filter.h
 
-          # 5. Détection du defconfig et injection des options de build
+          # 6. Détection du defconfig et injection des options de build
           CONFIG_TO_USE="${{ env.KERNEL_CONFIG }}"
           if [ ! -f "arch/arm64/configs/$CONFIG_TO_USE" ] && [ -f "arch/arm64/configs/vendor/kiev-perf_defconfig" ]; then
             CONFIG_TO_USE="vendor/kiev-perf_defconfig"
