@@ -44,7 +44,7 @@ jobs:
           # =====================================================================
 
           # Fix A : Injecter la variable manquante tout au début de alarmtimer.c
-          sed -i '1s#^#int alarm_debug = 0;\n#' kernel/time/alarmtimer.c
+          sed -i '1s|^|int alarm_debug = 0;\n|' kernel/time/alarmtimer.c
 
           # Fix B : Résoudre l'absence de type 'compat_uptr_t' au sommet de filter.h
           sed -i '1s|^|#include <linux/compat.h>\n|' include/linux/filter.h
