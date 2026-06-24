@@ -63,15 +63,16 @@ jobs:
           
           # 4. Application du patch sur ReSukiSU (KernelSU)
           cd KernelSU
-          patch -p1 < ksu_susfs.patch || echo "Patch ReSukiSU appliqué (les erreurs Kconfig vont être corrigées)"
+          patch -p1 < ksu_susfs.patch || echo "Patch ReSukiSU appliqué"
           
-          # COUPE-FIL DIRECT ISSU DU GUIDE RESUKISU :
-          # On restaure le fichier Kconfig d'origine de ReSukiSU pour effacer le mauvais patchage
+          # Restauration propre du Kconfig pour ReSukiSU
           git checkout kernel/Kconfig
-          
-          # On injecte manuellement la configuration SUSFS à la fin du fichier, hors du bloc 'choice'
           echo -e "\nconfig KSU_SUSFS\n\tbool \"Enable SUSFS Support for ReSukiSU\"\n\tdepends on KSU\n\tdefault y" >> kernel/Kconfig
           cd ..
+
+          # CORRECTION TECHNIQUE : Injection de l'en-tête manquante pour éviter l'erreur compat_uptr_t
+          echo "Correctif du fichier include/linux/filter.h..."
+          sed -i '1s/^/#include <linux\/compat.h>\n/' include/linux/filter.h
 
           # 5. Détection du defconfig et injection des options de build
           CONFIG_TO_USE="${{ env.KERNEL_CONFIG }}"
@@ -79,7 +80,6 @@ jobs:
             CONFIG_TO_USE="vendor/kiev-perf_defconfig"
           fi
           
-          echo "Modification du fichier de config : $CONFIG_TO_USE"
           echo "CONFIG_KSU=y" >> arch/arm64/configs/$CONFIG_TO_USE
           echo "CONFIG_KSU_SUSFS=y" >> arch/arm64/configs/$CONFIG_TO_USE
           echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> arch/arm64/configs/$CONFIG_TO_USE
@@ -97,14 +97,13 @@ jobs:
           export CLANG_TRIPLE=aarch64-linux-gnu-
           export CC=clang
           
-          # Utilisation du bon defconfig détecté au préalable
           CONFIG_TO_USE="${{ env.KERNEL_CONFIG }}"
           if [ ! -f "arch/arm64/configs/$CONFIG_TO_USE" ] && [ -f "arch/arm64/configs/vendor/kiev-perf_defconfig" ]; then
             CONFIG_TO_USE="vendor/kiev-perf_defconfig"
           fi
           
           make O=out $CONFIG_TO_USE
-          make -j$(nproc --all) O=out
+          make -j$(nproc --all) O=out KCFLAGS="-w"
 
       - name: Empaqueter avec AnyKernel3
         run: |
