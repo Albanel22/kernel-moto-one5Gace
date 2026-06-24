@@ -21,11 +21,10 @@ jobs:
 
       - name: Télécharger la Toolchain Clang de Google (AOSP)
         run: |
-          mkdir clang
+          git clone --depth=1 --filter=blob:none --sparse https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 clang
           cd clang
-          curl -LO https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r522817.tar.gz
-          tar -xf clang-r522817.tar.gz
-          echo "$(pwd)/bin" >> $GITHUB_PATH
+          git sparse-checkout set clang-r522817
+          echo "$(pwd)/clang-r522817/bin" >> $GITHUB_PATH
 
       - name: Cloner les sources du Kernel Motorola (sm7250)
         run: |
