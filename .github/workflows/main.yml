@@ -38,29 +38,28 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/kernel-src        
           
-          # Chemin direct défini manuellement
+          # 1. Préparation des chemins
           CLANG_BIN="$GITHUB_WORKSPACE/kernel_workspace/clang/bin"
           export PATH="$CLANG_BIN:$PATH"
           export ARCH=arm64
           export SUBARCH=arm64
+          export CROSS_COMPILE=aarch64-linux-gnu-
           
-          # Forcer GCC pour les outils hôtes (fixdep, kconfig)
-          export HOSTCC=gcc
-          export HOSTLD=ld
-          export HOSTAR=ar
-          
-          echo "Dossier Clang utilisé : $CLANG_BIN"
-          
-          # Compilation
+          # 2. Configuration : On utilise GCC pour les outils hôtes (sans LLVM)
+          # Cela permet de générer les outils sans le linker Clang
+          echo "Configuration initiale..."
           make O=out ARCH=arm64 \
-            CC=clang \
-            LLVM=1 LLVM_IAS=1 \
             kiev_defconfig
             
-          LTO=thin make O=out ARCH=arm64 \
+          # 3. Compilation : On utilise maintenant CLANG+LLVM
+          echo "Compilation du noyau..."
+          make O=out ARCH=arm64 \
             CC=clang \
+            LD=ld.lld \
             LLVM=1 LLVM_IAS=1 \
             -j$(nproc) Image.gz
+
+      
 
       - name: Preparation AnyKernel3
         run: |
