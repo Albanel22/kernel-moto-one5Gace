@@ -60,8 +60,16 @@ jobs:
           
           # 3. Application des patchs
           patch -p1 < kernel_susfs.patch || echo "Patch noyau appliqué"
+          
           cd KernelSU
           patch -p1 < ksu_susfs.patch || echo "Patch ReSukiSU appliqué"
+          
+          # CORRECTION DE LA DÉPENDANCE RÉCURSIVE :
+          # On annule la modification du fichier Kconfig faite par le patch pour enlever la boucle
+          git checkout kernel/Kconfig
+          
+          # On injecte proprement la configuration SUSFS tout à la fin du fichier, hors de tout "choice"
+          echo -e "\nconfig KSU_SUSFS\n\tbool \"Enable SUSFS Support for ReSukiSU\"\n\tdepends on KSU\n\tdefault y" >> kernel/Kconfig
           cd ..
 
           # 4. Activation des options requises
@@ -82,21 +90,13 @@ jobs:
           export CLANG_TRIPLE=aarch64-linux-gnu-
           export CC=clang
           
-          # CORRECTION : Vérification et bascule automatique sur la version -perf si nécessaire
           CONFIG_TO_USE="${{ env.KERNEL_CONFIG }}"
           if [ ! -f "arch/arm64/configs/$CONFIG_TO_USE" ]; then
-            echo "⚠️ Le fichier arch/arm64/configs/$CONFIG_TO_USE est introuvable."
             if [ -f "arch/arm64/configs/vendor/kiev-perf_defconfig" ]; then
-              echo "🔄 Configuration 'vendor/kiev-perf_defconfig' trouvée ! Bascule automatique..."
               CONFIG_TO_USE="vendor/kiev-perf_defconfig"
-            else
-              echo "❌ Impossible de trouver la configuration de kiev. Voici les fichiers disponibles :"
-              ls -la arch/arm64/configs/vendor/ || ls -la arch/arm64/configs/
-              exit 1
             fi
           fi
           
-          # Lancement de la configuration et de la compilation
           make O=out $CONFIG_TO_USE
           make -j$(nproc --all) O=out
 
