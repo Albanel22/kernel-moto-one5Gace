@@ -34,7 +34,7 @@ jobs:
             fi
           fi
 
-        - name: Compilation du Noyau pour Moto Kiev
+      - name: Compilation du Noyau pour Moto Kiev
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/kernel-src        
           
