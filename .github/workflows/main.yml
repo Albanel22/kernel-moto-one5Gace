@@ -40,13 +40,13 @@ jobs:
           curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s main
 
           # =====================================================================
-          # 🛠️ CORRECTIFS DE COMPATIBILITÉ REQUIS PAR LE CODE LINEAGEOS/MOTO 🛠️
+          # 🛠️ CORRECTIFS DE COMPATIBILITÉ (MÉTHODE ULTRA-ROBUSTE SANS SLASHES) 🛠️
           # =====================================================================
 
-          # Fix A : Initialiser la variable de temps Motorola manquante
-          sed -i '/#include/a \int alarm_debug = 0;' kernel/time/alarmtimer.c
+          # Fix A : Injecter la variable manquante tout au début de alarmtimer.c
+          sed -i '1s#^#int alarm_debug = 0;\n#' kernel/time/alarmtimer.c
 
-          # Fix B : Résoudre l'absence de type 'compat_uptr_t' dans filter.h (Délimiteur '#' sécurisé)
+          # Fix B : Résoudre l'absence de type 'compat_uptr_t' au sommet de filter.h
           sed -i '1s#^##include <linux/compat.h>\n#' include/linux/filter.h
 
           # =====================================================================
@@ -96,5 +96,3 @@ jobs:
         with:
           name: ReSukiSU-Kernel-Kiev-AnyKernel3
           path: ReSukiSU-Kernel-Kiev.zip
-
-  
