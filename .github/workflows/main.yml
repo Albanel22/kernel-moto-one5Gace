@@ -39,31 +39,31 @@ jobs:
           cd $GITHUB_WORKSPACE/kernel_workspace/kernel-src
           make mrproper
           
-          # Setup Toolchain
+          # Ajout explicite au PATH pour qu'il soit vu par TOUT le système de build
           export PATH="$GITHUB_WORKSPACE/kernel_workspace/clang/bin:$PATH"
           export ARCH=arm64
           export SUBARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           
-          # Compilation avec la config Lito (le chipset du Kiev/SM7250)
-          echo "Utilisation de la configuration : vendor/lito-perf_defconfig"
+          # Vérification de la présence de ld.lld avant de lancer make
+          echo "Vérification de lld :"
+          ls -l $GITHUB_WORKSPACE/kernel_workspace/clang/bin/ld.lld
           
+          # Compilation avec forçage du chemin du linker
+          # On définit LD comme le chemin complet vers lld
           make ARCH=arm64 \
             CC=clang \
-            LD=ld.lld \
+            LD=$GITHUB_WORKSPACE/kernel_workspace/clang/bin/ld.lld \
             LLVM=1 LLVM_IAS=1 \
-            HOSTCC=gcc HOSTLD=ld \
             KCFLAGS="-w" KBUILD_AFLAGS="-w" \
             lito-perf_defconfig
             
           make ARCH=arm64 \
             CC=clang \
-            LD=ld.lld \
+            LD=$GITHUB_WORKSPACE/kernel_workspace/clang/bin/ld.lld \
             LLVM=1 LLVM_IAS=1 \
-            HOSTCC=gcc HOSTLD=ld \
             KCFLAGS="-w" KBUILD_AFLAGS="-w" \
             -j$(nproc) Image.gz
-
 
       - name: Preparation AnyKernel3
         run: |
