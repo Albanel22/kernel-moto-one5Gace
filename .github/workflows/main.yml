@@ -37,29 +37,19 @@ jobs:
       - name: Compilation du Noyau pour Moto Kiev
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/kernel-src        
-          
-          # 1. Préparation des chemins
-          CLANG_BIN="$GITHUB_WORKSPACE/kernel_workspace/clang/bin"
+          # On retrouve le dossier bin de Clang de manière plus fiable
+          CLANG_BIN=$(find $GITHUB_WORKSPACE/kernel_workspace/clang -name "clang" -type f | xargs dirname)
           export PATH="$CLANG_BIN:$PATH"
+          
+          # Variables nécessaires pour le noyau SM8250
           export ARCH=arm64
           export SUBARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
+          export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
           
-          # 2. Configuration : On utilise GCC pour les outils hôtes (sans LLVM)
-          # Cela permet de générer les outils sans le linker Clang
-          echo "Configuration initiale..."
-          make O=out ARCH=arm64 \
-            kiev_defconfig
-            
-          # 3. Compilation : On utilise maintenant CLANG+LLVM
-          echo "Compilation du noyau..."
-          make O=out ARCH=arm64 \
-            CC=clang \
-            LD=ld.lld \
-            LLVM=1 LLVM_IAS=1 \
-            -j$(nproc) Image.gz
-
-      
+          # On applique la méthode qui a réussi précédemment
+          make O=out LLVM=1 LLVM_IAS=1 kiev_defconfig
+          LTO=thin make O=out LLVM=1 LLVM_IAS=1 -j$(nproc) Image.gz
 
       - name: Preparation AnyKernel3
         run: |
