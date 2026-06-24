@@ -21,7 +21,7 @@ jobs:
       - name: Clonage sources kernel
         run: |
           git clone --depth=1 https://github.com/LineageOS/android_kernel_motorola_sm8250.git -b lineage-23.2 $GITHUB_WORKSPACE/kernel_workspace/kernel-src
-
+          
       - name: Injection ReSukiSU
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/kernel-src
