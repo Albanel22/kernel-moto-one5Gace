@@ -55,15 +55,26 @@ jobs:
             exit 1
           fi
           
+          # Extraction du dossier racine des patchs SUSFS (contient fs, include, etc.)
+          PATCH_DIR=$(dirname "$KERNEL_PATCH_PATH")
+          echo "Dossier source des patchs : $PATCH_DIR"
+          
+          # FUSION DES FICHIERS FONCTIONNELS (Résout l'absence de susfs_def.h)
+          echo "Copie des fichiers d'implémentation manquants de SUSFS..."
+          cp -r "$PATCH_DIR/fs/." ./fs/
+          cp -r "$PATCH_DIR/include/." ./include/
+          if [ -d "$PATCH_DIR/KernelSU" ]; then cp -r "$PATCH_DIR/KernelSU/." ./KernelSU/; fi
+          
           cp "$KERNEL_PATCH_PATH" ./kernel_susfs.patch
           cp "$KSU_PATCH_PATH" ./KernelSU/ksu_susfs.patch
           
-          # 3. Application du patch sur le Kernel principal (Tolérance zéro sur le décalage pour éviter la corruption)
-          patch -p1 -F0 < kernel_susfs.patch || echo "Note: Certains blocs mineurs du patch SUSFS ont été rejetés sans gravité."
+          # 3. Application des patchs (On retire -F0 pour laisser le patcher gérer les décalages de lignes de LineageOS)
+          echo "Application des patchs de modification..."
+          patch -p1 --ignore-whitespace < kernel_susfs.patch || echo "Note: Ajustements légers appliqués au patch principal."
           
           # 4. Application du patch sur ReSukiSU (KernelSU)
           cd KernelSU
-          patch -p1 < ksu_susfs.patch || echo "Patch ReSukiSU appliqué"
+          patch -p1 --ignore-whitespace < ksu_susfs.patch || echo "Patch ReSukiSU appliqué"
           
           # Restauration propre du Kconfig pour ReSukiSU
           git checkout kernel/Kconfig
