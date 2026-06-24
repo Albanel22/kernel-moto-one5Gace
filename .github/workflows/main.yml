@@ -34,41 +34,35 @@ jobs:
             fi
           fi
 
-      - name: Build Kernel
+      - name: Compilation du Noyau pour Moto Kiev
         run: |
-          cd $GITHUB_WORKSPACE/kernel_workspace/kernel-src
-          make mrproper
+          cd $GITHUB_WORKSPACE/kernel_workspace/kernel-src        
+          CLANG_BIN=$(dirname $(find $GITHUB_WORKSPACE/kernel_workspace/clang -name clang -type f | head -n 1))
           
-          # Setup paths
-          CLANG_PATH="$GITHUB_WORKSPACE/kernel_workspace/clang"
-          export PATH="$CLANG_PATH/bin:$PATH"
+          # 1. Configurer les variables pour le build
+          export PATH="$CLANG_BIN:$PATH"
           export ARCH=arm64
           export SUBARCH=arm64
-          export CROSS_COMPILE=aarch64-linux-gnu-
           
-          # On utilise les outils système pour les outils de build (fixdep, kconfig)
-          # Cela évite le conflit avec les bibliothèques x86_64 de l'image Ubuntu
+          # 2. Forcer GCC pour les outils hôtes (fixdep, kconfig) afin d'éviter le conflit avec la libc système
           export HOSTCC=gcc
           export HOSTLD=ld
           export HOSTAR=ar
           
-          echo "Utilisation de la configuration : vendor/lito-perf_defconfig"
-          
-          # Configuration
-          make ARCH=arm64 \
+          # 3. Compilation avec répertoire de sortie 'out'
+          # On définit les variables pour le linker et le compilateur
+          make O=out ARCH=arm64 \
             CC=clang \
             LD=ld.lld \
             LLVM=1 LLVM_IAS=1 \
-            KCFLAGS="-w" KBUILD_AFLAGS="-w" \
-            lito-perf_defconfig
+            kiev_defconfig
             
-          # Compilation
-          make ARCH=arm64 \
+          LTO=thin make O=out ARCH=arm64 \
             CC=clang \
             LD=ld.lld \
             LLVM=1 LLVM_IAS=1 \
-            KCFLAGS="-w" KBUILD_AFLAGS="-w" \
             -j$(nproc) Image.gz
+
 
       - name: Preparation AnyKernel3
         run: |
