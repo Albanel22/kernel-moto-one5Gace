@@ -1,101 +1,115 @@
-name: Build ReSukiSU Kernel - Final Moto Kiev
+name: Build Kernel ReSukiSU + SUSFS - Motorola Kiev
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Lancement manuel via l'interface GitHub
+
+env:
+  KERNEL_REPO: https://github.com/LineageOS/android_kernel_motorola_sm8250.git
+  KERNEL_BRANCH: lineage-23.2
+  KERNEL_CONFIG: vendor/kiev_defconfig
+  ANYKERNEL_REPO: https://github.com/osm0sis/AnyKernel3.git
+  ANYKERNEL_BRANCH: master
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Installation des dependances
+      - name: Nettoyer et installer les dépendances de compilation
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc bison build-essential ccache flex g++-multilib gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev libtinfo6 pahole binutils-aarch64-linux-gnu
+          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.1-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev pahole
 
-      - name: Telechargement de Clang (Proton Clang)
+      - name: Télécharger la Toolchain Clang de Google (AOSP)
         run: |
-          mkdir -p $GITHUB_WORKSPACE/kernel_workspace/clang
-          # Téléchargement direct d'une version stable de Proton Clang
-          git clone --depth=1 https://github.com/kdrag0n/proton-clang $GITHUB_WORKSPACE/kernel_workspace/clang
+          git clone --depth=1 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 -b main-kernel-build-2024 clang
+          echo "$GITHUB_WORKSPACE/clang/bin" >> $GITHUB_PATH
 
-      - name: Clonage sources kernel
+      - name: Cloner les sources du Kernel Motorola (sm8250)
         run: |
-          git clone --depth=1 https://github.com/LineageOS/android_kernel_motorola_sm8250.git -b lineage-23.2 $GITHUB_WORKSPACE/kernel_workspace/kernel-src
+          git clone ${{ env.KERNEL_REPO }} -b ${{ env.KERNEL_BRANCH }} --depth=1 kernel-source
+
+      - name: Cloner les patchs SUSFS officiels (Branche 4.19)
+        run: |
+          git clone https://gitlab.com/eun005/susfs419.git -b kernel-4.19 susfs-source
+
+      - name: Injecter ReSukiSU et appliquer les patchs SUSFS
+        run: |
+          cd kernel-source
           
-      - name: Injection ReSukiSU
-        run: |
-          cd $GITHUB_WORKSPACE/kernel_workspace/kernel-src
+          # 1. Injection de ReSukiSU (Kernel-level Root via dépôt Git propre)
           rm -rf drivers/kernelsu
           git clone https://github.com/ReSukiSU/ReSukiSU drivers/kernelsu
-          cd drivers/kernelsu && git checkout main && cd ..
+          
           if [ -f "drivers/Makefile" ]; then
             if ! grep -q "obj-\$(CONFIG_KSU) += kernelsu/" drivers/Makefile; then
               echo "obj-\$(CONFIG_KSU) += kernelsu/" >> drivers/Makefile
             fi
           fi
-
-      - name: Compilation du Noyau pour Moto Kiev
-        run: |
-          cd $GITHUB_WORKSPACE/kernel_workspace/kernel-src        
           
-          # 1. Nettoyage TOTAL des variables d'environnement de linkage
-          # Cela empêche le linker système d'être confus par des chemins d'autres toolchains
+          # 2. Application des patchs SUSFS au système de fichiers (fs) du noyau et à KernelSU
+          cp ../susfs-source/kernel_patches/50_add_susfs_in_kernel-4.19.patch ./
+          cp ../susfs-source/kernel_patches/KernelSU/10_add_susfs_to_ksu.patch ./drivers/kernelsu/
+          
+          patch -p1 < 50_add_susfs_in_kernel-4.19.patch || echo "Patch noyau appliqué"
+          cd drivers/kernelsu
+          patch -p1 < 10_add_susfs_to_ksu.patch || echo "Patch KSU appliqué"
+          cd ../..
+
+          # 3. Activation des options requises dans la configuration de votre Motorola (kiev)
+          echo "CONFIG_KSU=y" >> arch/arm64/configs/${{ env.KERNEL_CONFIG }}
+          echo "CONFIG_KSU_SUSFS=y" >> arch/arm64/configs/${{ env.KERNEL_CONFIG }}
+          echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> arch/arm64/configs/${{ env.KERNEL_CONFIG }}
+          echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> arch/arm64/configs/${{ env.KERNEL_CONFIG }}
+          echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y" >> arch/arm64/configs/${{ env.KERNEL_CONFIG }}
+          echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> arch/arm64/configs/${{ env.KERNEL_CONFIG }}
+
+      - name: Compiler le Kernel (sm8250 / 4.19)
+        run: |
+          cd kernel-source
+          
+          # Protection contre l'erreur libc.so.6 (Nettoyage de l'environnement hôte)
           unset LDFLAGS
           unset LD_LIBRARY_PATH
           unset LD
           
-          # 2. Préparation des chemins
-          CLANG_BIN="$GITHUB_WORKSPACE/kernel_workspace/clang/bin"
-          export PATH="$CLANG_BIN:$PATH"
           export ARCH=arm64
           export SUBARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           
-          # 3. Forçage explicite de GCC
+          # Forçage des outils hôtes sur le GCC natif d'Ubuntu
           export HOSTCC=gcc
           export HOSTLD=ld
           export HOSTAR=ar
           export HOSTCXX=g++
           
-          echo "--- Début de la compilation ---"
+          export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
           
-          # 4. Compilation en deux temps
-          make O=out ARCH=arm64 kiev_defconfig
+          # Étape A: Génération de la configuration et des scripts outils (via GCC)
+          make O=out ${{ env.KERNEL_CONFIG }}
           
-          make O=out ARCH=arm64 \
+          # Étape B: Compilation finale du noyau (via Clang)
+          make -j$(nproc --all) O=out \
             CC=clang \
             HOSTCC=gcc \
-            LLVM=1 LLVM_IAS=1 \
-            -j$(nproc) Image.gz
+            LLVM=1 LLVM_IAS=1
 
-      
-
-      - name: Preparation AnyKernel3
+      - name: Empaqueter avec AnyKernel3
         run: |
-          cd $GITHUB_WORKSPACE/kernel_workspace
-          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel
-          cp kernel-src/arch/arm64/boot/Image.gz AnyKernel/
+          git clone ${{ env.ANYKERNEL_REPO }} -b ${{ env.ANYKERNEL_BRANCH }} AnyKernel3
           
-          cd AnyKernel
-          cat << 'EOF' > anykernel.sh
-          properties() {
-          kernel.string=ReSukiSU-Kiev-Final
-          do.devicecheck=1
-          device.name1=kiev
-          do.modules=0
-          do.systemless=1
-          do.cleanup=1
-          }
-          block=/dev/block/by-name/boot;
-          is_slot_device=auto;
-          . tools/ak3-core.sh;
-          split_boot;
-          flash_boot;
-          EOF
-          chmod +x anykernel.sh
+          # Copie de l'image (prend en compte Image ou Image.gz selon la configuration finale)
+          if [ -f "kernel-source/out/arch/arm64/boot/Image.gz" ]; then
+            cp kernel-source/out/arch/arm64/boot/Image.gz AnyKernel3/
+          else
+            cp kernel-source/out/arch/arm64/boot/Image AnyKernel3/
+          fi
+          
+          cd AnyKernel3
+          sed -i 's/device.name1=maguro/device.name1=kiev/g' anykernel.sh
+          zip -r ../ReSukiSU-SUSFS-Kernel-Kiev.zip *
 
-      - name: Upload Artifact
+      - name: Téléverser le ZIP final sur GitHub
         uses: actions/upload-artifact@v4
         with:
-          name: ReSukiSU-Kernel-Kiev
-          path: kernel_workspace/AnyKernel/*
+          name: ReSukiSU-SUSFS-Kernel-Kiev-AnyKernel3
+          path: ReSukiSU-SUSFS-Kernel-Kiev.zip
