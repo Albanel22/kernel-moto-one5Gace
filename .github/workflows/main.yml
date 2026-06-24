@@ -1,4 +1,4 @@
-name: Build Kernel ReSukiSU + SUSFS - Motorola Kiev
+name: Build Kernel ReSukiSU - Motorola Kiev
 
 on:
   workflow_dispatch:
@@ -33,77 +33,23 @@ jobs:
         run: |
           git clone ${{ env.KERNEL_REPO }} -b ${{ env.KERNEL_BRANCH }} --depth=1 kernel-source
 
-      - name: Cloner les patchs SUSFS officiels (Branche 4.19)
-        run: |
-          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b kernel-4.19 susfs-source
-
-      - name: Injecter ReSukiSU et préparer les fichiers SUSFS
+      - name: Injecter ReSukiSU
         run: |
           cd kernel-source
-          
-          # 1. Injection de ReSukiSU
+          # Injection officielle et automatique de ReSukiSU
           curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s main
-          
-          # 2. Extraction des chemins des patchs SUSFS
-          KERNEL_PATCH_PATH=$(find ../susfs-source/ -iname "*susfs*4.19*.patch" | head -n 1)
-          KSU_PATCH_PATH=$(find ../susfs-source/ -iname "*susfs*to*ksu*.patch" | head -n 1)
-          if [ -z "$KSU_PATCH_PATH" ]; then KSU_PATCH_PATH=$(find ../susfs-source/ -iname "*susfs*ksu*.patch" | head -n 1); fi
-          
-          PATCH_DIR=$(dirname "$KERNEL_PATCH_PATH")
-          
-          # 3. Copie des fichiers physiques SUSFS indispensables
-          cp -r "$PATCH_DIR/fs/." ./fs/
-          cp -r "$PATCH_DIR/include/." ./include/
-          if [ -d "$PATCH_DIR/KernelSU" ]; then cp -r "$PATCH_DIR/KernelSU/." ./KernelSU/; fi
-          
-          cp "$KSU_PATCH_PATH" ./KernelSU/ksu_susfs.patch
-          
-          # 4. Application du patch sur KernelSU en mode batch (non-interactif)
-          cd KernelSU
-          patch -p1 --batch --ignore-whitespace --fuzz=3 < ksu_susfs.patch || echo "Note: Des ajustements mineurs ont été faits sur l'arbre ReSukiSU."
-          
-          # Verrouillage des sous-systèmes RCU requis par SUSFS
-          git checkout kernel/Kconfig
-          echo -e "\nconfig KSU_SUSFS\n\tbool \"Enable SUSFS Support for ReSukiSU\"\n\tdepends on KSU\n\tselect TASKS_RCU\n\tselect TASKS_TRACE_RCU\n\tdefault y" >> kernel/Kconfig
-          cd ..
 
-          # =====================================================================
-          # 🔥 INJECTION DIRECTE DES STRUCTURES DANS LE CODE SOURCE 🔥
-          # =====================================================================
-
-          # Correctif A : Initialiser la variable de temps manquante (alarmtimer)
+          # Correctif de compatibilité pour le gestionnaire de temps Motorola
           sed -i '/#include/a \int alarm_debug = 0;' kernel/time/alarmtimer.c
 
-          # Correctif B : Ajout des variables SUSFS globales et macros indispensables dans fs/namespace.c
-          sed -i '1s/^/#define DEFAULT_SUS_MNT_ID 1000000\n#define DEFAULT_SUS_MNT_GROUP_ID 1000000\n#define DEFAULT_SUS_MNT_ID_FOR_KSU_PROC_UNSHARE 2000000\n#define CL_COPY_MNT_NS 0x40\n#define CL_ZYGOTE_COPY_MNT_NS 0x80\n#include <linux/ida.h>\nDEFINE_IDA(susfs_mnt_id_ida);\nDEFINE_IDA(susfs_mnt_group_ida);\n/' fs/namespace.c
-
-          # Correctif C : Injecter le champ requis dans la structure de montage (include/linux/mount.h)
-          sed -i '/struct vfsmount {/a \	int susfs_mnt_id_backup;' include/linux/mount.h
-
-          # Correctif D : Forcer l'existence des drapeaux d'état dans fs.h
-          if ! grep -q "INODE_STATE_SUS_KSTAT" include/linux/fs.h; then
-            echo -e "\n#define INODE_STATE_SUS_KSTAT (1 << 27)" >> include/linux/fs.h
-          fi
-
-          # Correctif E : Fix de la boucle d'en-tête réseau
-          sed -i '1s/^/typedef unsigned int compat_uptr_t;\n/' include/linux/filter.h
-          
-          # =====================================================================
-
-          # 5. Configuration finale du fichier defconfig
+          # Détection et préparation du defconfig
           CONFIG_TO_USE="${{ env.KERNEL_CONFIG }}"
           if [ ! -f "arch/arm64/configs/$CONFIG_TO_USE" ] && [ -f "arch/arm64/configs/vendor/kiev-perf_defconfig" ]; then
             CONFIG_TO_USE="vendor/kiev-perf_defconfig"
           fi
           
-          echo "CONFIG_NO_HZ_COMMON=y" >> arch/arm64/configs/$CONFIG_TO_USE
-          echo "CONFIG_NO_HZ_FULL=y" >> arch/arm64/configs/$CONFIG_TO_USE
+          # Activation de KernelSU dans le fichier de config
           echo "CONFIG_KSU=y" >> arch/arm64/configs/$CONFIG_TO_USE
-          echo "CONFIG_KSU_SUSFS=y" >> arch/arm64/configs/$CONFIG_TO_USE
-          echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> arch/arm64/configs/$CONFIG_TO_USE
-          echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> arch/arm64/configs/$CONFIG_TO_USE
-          echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y" >> arch/arm64/configs/$CONFIG_TO_USE
-          echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> arch/arm64/configs/$CONFIG_TO_USE
 
       - name: Compiler le Kernel (sm8250 / 4.19)
         run: |
@@ -131,10 +77,10 @@ jobs:
           
           cd AnyKernel3
           sed -i 's/device.name1=maguro/device.name1=kiev/g' anykernel.sh
-          zip -r ../ReSukiSU-SUSFS-Kernel-Kiev.zip *
+          zip -r ../ReSukiSU-Kernel-Kiev.zip *
 
       - name: Téléverser le ZIP final sur GitHub
         uses: actions/upload-artifact@v4
         with:
-          name: ReSukiSU-SUSFS-Kernel-Kiev-AnyKernel3
-          path: ReSukiSU-SUSFS-Kernel-Kiev.zip
+          name: ReSukiSU-Kernel-Kiev-AnyKernel3
+          path: ReSukiSU-Kernel-Kiev.zip
