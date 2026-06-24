@@ -37,17 +37,19 @@ jobs:
       - name: Compilation du Noyau pour Moto Kiev
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/kernel-src        
-          # On retrouve le dossier bin de Clang de manière plus fiable
-          CLANG_BIN=$(find $GITHUB_WORKSPACE/kernel_workspace/clang -name "clang" -type f | xargs dirname)
-          export PATH="$CLANG_BIN:$PATH"
           
-          # Variables nécessaires pour le noyau SM8250
+          # On définit le chemin vers le dossier 'bin' de la toolchain Google
+          # Dans la toolchain prebuilts/clang/host/linux-x86, le binaire est dans 'bin'
+          export PATH="$GITHUB_WORKSPACE/kernel_workspace/clang/bin:$PATH"
+          
           export ARCH=arm64
           export SUBARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
           
-          # On applique la méthode qui a réussi précédemment
+          echo "Path défini sur : $PATH"
+          
+          # Compilation
           make O=out LLVM=1 LLVM_IAS=1 kiev_defconfig
           LTO=thin make O=out LLVM=1 LLVM_IAS=1 -j$(nproc) Image.gz
 
