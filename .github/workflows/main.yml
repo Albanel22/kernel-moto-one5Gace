@@ -39,28 +39,33 @@ jobs:
           cd $GITHUB_WORKSPACE/kernel_workspace/kernel-src
           make mrproper
           
-          # Ajout explicite au PATH pour qu'il soit vu par TOUT le système de build
-          export PATH="$GITHUB_WORKSPACE/kernel_workspace/clang/bin:$PATH"
+          # Setup paths
+          CLANG_PATH="$GITHUB_WORKSPACE/kernel_workspace/clang"
+          export PATH="$CLANG_PATH/bin:$PATH"
           export ARCH=arm64
           export SUBARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           
-          # Vérification de la présence de ld.lld avant de lancer make
-          echo "Vérification de lld :"
-          ls -l $GITHUB_WORKSPACE/kernel_workspace/clang/bin/ld.lld
+          # On utilise les outils système pour les outils de build (fixdep, kconfig)
+          # Cela évite le conflit avec les bibliothèques x86_64 de l'image Ubuntu
+          export HOSTCC=gcc
+          export HOSTLD=ld
+          export HOSTAR=ar
           
-          # Compilation avec forçage du chemin du linker
-          # On définit LD comme le chemin complet vers lld
+          echo "Utilisation de la configuration : vendor/lito-perf_defconfig"
+          
+          # Configuration
           make ARCH=arm64 \
             CC=clang \
-            LD=$GITHUB_WORKSPACE/kernel_workspace/clang/bin/ld.lld \
+            LD=ld.lld \
             LLVM=1 LLVM_IAS=1 \
             KCFLAGS="-w" KBUILD_AFLAGS="-w" \
             lito-perf_defconfig
             
+          # Compilation
           make ARCH=arm64 \
             CC=clang \
-            LD=$GITHUB_WORKSPACE/kernel_workspace/clang/bin/ld.lld \
+            LD=ld.lld \
             LLVM=1 LLVM_IAS=1 \
             KCFLAGS="-w" KBUILD_AFLAGS="-w" \
             -j$(nproc) Image.gz
