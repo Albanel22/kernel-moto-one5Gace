@@ -39,8 +39,17 @@ jobs:
           # Injection officielle et automatique de ReSukiSU
           curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s main
 
-          # Correctif de compatibilité pour le gestionnaire de temps Motorola
+          # =====================================================================
+          # 🛠️ CORRECTIFS DE COMPATIBILITÉ REQUIS PAR LE CODE LINEAGEOS/MOTO 🛠️
+          # =====================================================================
+
+          # Fix A : Initialiser la variable de temps Motorola manquante
           sed -i '/#include/a \int alarm_debug = 0;' kernel/time/alarmtimer.c
+
+          # Fix B : Résoudre l'absence de type 'compat_uptr_t' dans filter.h
+          sed -i '1s/^/#include <linux/compat.h>\n/' include/linux/filter.h
+
+          # =====================================================================
 
           # Détection et préparation du defconfig
           CONFIG_TO_USE="${{ env.KERNEL_CONFIG }}"
@@ -48,8 +57,11 @@ jobs:
             CONFIG_TO_USE="vendor/kiev-perf_defconfig"
           fi
           
-          # Activation de KernelSU dans le fichier de config
+          # Activation des options essentielles pour le bon fonctionnement de KernelSU/ReSukiSU
           echo "CONFIG_KSU=y" >> arch/arm64/configs/$CONFIG_TO_USE
+          echo "CONFIG_TASKS_RCU=y" >> arch/arm64/configs/$CONFIG_TO_USE
+          echo "CONFIG_TASKS_RCU_GENERIC=y" >> arch/arm64/configs/$CONFIG_TO_USE
+          echo "CONFIG_TASKS_TRACE_RCU=y" >> arch/arm64/configs/$CONFIG_TO_USE
 
       - name: Compiler le Kernel (sm8250 / 4.19)
         run: |
