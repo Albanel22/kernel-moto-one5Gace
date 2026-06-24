@@ -37,32 +37,30 @@ jobs:
         run: |
           git clone https://gitlab.com/simonpunk/susfs4ksu.git -b kernel-4.19 susfs-source
 
-      - name: Injecter ReSukiSU et appliquer les patchs SUSFS
+      - name: Injecter ReSukiSU et préparer les fichiers SUSFS
         run: |
           cd kernel-source
           
           # 1. Injection de ReSukiSU
           curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s main
           
-          # 2. Extraction des patchs SUSFS
+          # 2. Extraction des chemins des patchs SUSFS
           KERNEL_PATCH_PATH=$(find ../susfs-source/ -iname "*susfs*4.19*.patch" | head -n 1)
           KSU_PATCH_PATH=$(find ../susfs-source/ -iname "*susfs*to*ksu*.patch" | head -n 1)
           if [ -z "$KSU_PATCH_PATH" ]; then KSU_PATCH_PATH=$(find ../susfs-source/ -iname "*susfs*ksu*.patch" | head -n 1); fi
           
           PATCH_DIR=$(dirname "$KERNEL_PATCH_PATH")
           
-          # 3. Fusion des fichiers d'implémentation
+          # 3. Copie des fichiers physiques SUSFS indispensables
           cp -r "$PATCH_DIR/fs/." ./fs/
           cp -r "$PATCH_DIR/include/." ./include/
           if [ -d "$PATCH_DIR/KernelSU" ]; then cp -r "$PATCH_DIR/KernelSU/." ./KernelSU/; fi
           
-          cp "$KERNEL_PATCH_PATH" ./kernel_susfs.patch
           cp "$KSU_PATCH_PATH" ./KernelSU/ksu_susfs.patch
           
-          # 4. Application des patchs de base en mode non-interactif
-          patch -p1 --ignore-whitespace --fuzz=3 < kernel_susfs.patch || true
+          # 4. Application du patch STRICTEMENT sur KernelSU (ReSukiSU)
           cd KernelSU
-          patch -p1 --ignore-whitespace --fuzz=3 < ksu_susfs.patch || true
+          patch -p1 --ignore-whitespace < ksu_susfs.patch || echo "Patch ReSukiSU SUSFS appliqué."
           
           # Verrouillage des sous-systèmes RCU requis par SUSFS
           git checkout kernel/Kconfig
@@ -70,27 +68,24 @@ jobs:
           cd ..
 
           # =====================================================================
-          # 🔥 COUCHE DE COMPATIBILITÉ CHIRURGICALE POUR LINEAGEOS / MOTOROLA 🔥
+          # 🔥 INJECTION DIRECTE DES STRUCTURES DANS LE CODE SOURCE 🔥
           # =====================================================================
 
-          # Correctif A : Initialiser la variable manquante alarm_debug dans le gestionnaire de temps
+          # Correctif A : Initialiser la variable de temps manquante (alarmtimer)
           sed -i '/#include/a \int alarm_debug = 0;' kernel/time/alarmtimer.c
 
-          # Correctif B : Injecter manuellement le membre requis par SUSFS dans la structure vfsmount
+          # Correctif B : Ajout des variables SUSFS globales et macros indispensables dans fs/namespace.c
+          sed -i '1s/^/#define DEFAULT_SUS_MNT_ID 1000000\n#define DEFAULT_SUS_MNT_GROUP_ID 1000000\n#define DEFAULT_SUS_MNT_ID_FOR_KSU_PROC_UNSHARE 2000000\n#define CL_COPY_MNT_NS 0x40\n#define CL_ZYGOTE_COPY_MNT_NS 0x80\n#include <linux/ida.h>\nDEFINE_IDA(susfs_mnt_id_ida);\nDEFINE_IDA(susfs_mnt_group_ida);\n/' fs/namespace.c
+
+          # Correctif C : Injecter le champ requis dans la structure de montage (include/linux/mount.h)
           sed -i '/struct vfsmount {/a \	int susfs_mnt_id_backup;' include/linux/mount.h
 
-          # Correctif C : Injecter les macros SUSFS manquantes et les structures IDA au sommet de fs/namespace.c
-          sed -i '1s/^/#define DEFAULT_SUS_MNT_ID 1000000\n#define DEFAULT_SUS_MNT_GROUP_ID 1000000\n#define DEFAULT_SUS_MNT_ID_FOR_KSU_PROC_UNSHARE 2000000\n#define CL_COPY_MNT_NS 0x40\n#define CL_ZYGOTE_COPY_MNT_NS 0x80\n#include <linux/ida.h>\nextern struct ida susfs_mnt_id_ida;\nextern struct ida susfs_mnt_group_ida;\n/' fs/namespace.c
-
-          # Correctif D : Réparation des appels (Utilisation sécurisée du délimiteur # pour sed)
-          sed -i 's#alloc_vfsmnt(\([^,)]*\))#alloc_vfsmnt(\1, false, 0)#g' fs/namespace.c
-
-          # Correctif E : Sécurité anti-rejet pour la variable d'état d'indexation (fs.h)
+          # Correctif D : Forcer l'existence des drapeaux d'état dans fs.h
           if ! grep -q "INODE_STATE_SUS_KSTAT" include/linux/fs.h; then
             echo -e "\n#define INODE_STATE_SUS_KSTAT (1 << 27)" >> include/linux/fs.h
           fi
 
-          # Correctif F : Résolution de la boucle d'en-tête de filtre réseau
+          # Correctif E : Fix de la boucle d'en-tête réseau
           sed -i '1s/^/typedef unsigned int compat_uptr_t;\n/' include/linux/filter.h
           
           # =====================================================================
