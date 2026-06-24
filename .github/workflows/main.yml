@@ -5,7 +5,7 @@ on:
 
 env:
   KERNEL_REPO: https://github.com/LineageOS/android_kernel_motorola_sm7250.git
-  KERNEL_BRANCH: lineage-23.2 # MODIFIÉ : Aligné sur LineageOS 23
+  KERNEL_BRANCH: lineage-23 # CORRIGÉ : Vrai nom de branche pour LineageOS 23
   KERNEL_CONFIG: vendor/kiev_defconfig
   ANYKERNEL_REPO: https://github.com/osm0sis/AnyKernel3.git
   ANYKERNEL_BRANCH: master
