@@ -112,7 +112,7 @@ jobs:
           fi
 
           if [ -f "drivers/kernelsu/supercalls.c" ]; then
-            sed -i '1s|^|#include <linux/types.h>\n#include <linux/fs.h>\nvoid susfs_add_try_umount(double target_mnt_ns, char *target_path) {} void susfs_set_i_state_on_external_dir(struct dentry *dentry) {} void susfs_set_hide_sus_mnts_for_all_procs(bool enable) {}\n|' drivers/kernelsu/supercalls.c
+            sed -i '1s|^|#include <linux/types.h>\n#include <linux/fs.h>\nvoid susfs_add_try_umount(void *arg) {} void susfs_set_i_state_on_external_dir(struct dentry *dentry) {} void susfs_set_hide_sus_mnts_for_all_procs(bool enable) {}\n|' drivers/kernelsu/supercalls.c
           fi
 
           if [ -f "drivers/kernelsu/ksud.c" ]; then
