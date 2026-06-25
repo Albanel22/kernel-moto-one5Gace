@@ -58,8 +58,7 @@ jobs:
             sed -i 's/select TASKS_TRACE_RCU//g' KernelSU/Kconfig
           fi
 
-          # Fix E : Définir la constante NOHZ_KICK_MASK manquante dans le scheduler de Motorola
-          sed -i '1s|^|#define NOHZ_KICK_MASK 0x1\n|' kernel/sched/core.c
+          # NOTE : Fix E supprimé (NOHZ_KICK_MASK générait un conflit dans kernel/sched/core.c)
 
           # Fix F : Rediriger bpf_stats_handler vers le gestionnaire d'entiers standard si non défini
           sed -i '1s|^|#define bpf_stats_handler proc_dointvec\n|' kernel/sysctl.c
@@ -133,8 +132,8 @@ jobs:
           make O=out $CONFIG_TO_USE
           make O=out olddefconfig
           
-          # 🔬 COMPILATION SANS PARALLÉLISME (Pour attraper le bug exact en fin de log)
-          make O=out
+          # On remet le multi-cœur ET le flag "-w" pour étouffer le zèle du compilateur sur core.c
+          make -j$(nproc --all) O=out KCFLAGS="-w"
 
       - name: Empaqueter avec AnyKernel3
         run: |
