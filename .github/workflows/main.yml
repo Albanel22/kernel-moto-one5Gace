@@ -84,11 +84,11 @@ jobs:
             sed -i '170s/^/#/' drivers/kernelsu/Kbuild
           fi
 
-          # Fix K : Ajouter les répertoires d'en-têtes SELinux générés au Kbuild de ReSukiSU
+          # Fix K : Ajouter les chemins d'accès SELinux réels et générés directement dans l'environnement ReSukiSU
           if [ -f "drivers/kernelsu/Kbuild" ]; then
-            echo "ccflags-y += -I\$(srctree)/security/selinux -I\$(objtree)/security/selinux -I\$(srctree)/security/selinux/include" >> drivers/kernelsu/Kbuild
+            echo "ccflags-y += -I\$(srctree)/security/selinux -I\$(objtree)/security/selinux -I\$(srctree)/security/selinux/include -I\$(objtree)/security/selinux/include" >> drivers/kernelsu/Kbuild
           fi
-          
+
           # =====================================================================
 
           # Détection et préparation du defconfig
