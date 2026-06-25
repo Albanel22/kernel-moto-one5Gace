@@ -71,8 +71,11 @@ jobs:
           sed -i '1s|^|int alarm_debug = 0;\n|' kernel/time/alarmtimer.c
           sed -i '1s|^|typedef unsigned int compat_uptr_t;\n|' include/linux/filter.h
           
-          # Fix E (Réinjecté) : Définir la constante demandée par SUSFS dans le scheduler de Motorola
+          # Fix E : Définir la constante demandée par SUSFS dans le scheduler de Motorola
           sed -i '1s|^|#define NOHZ_KICK_MASK 0x1\n|' kernel/sched/core.c
+          
+          # Fix F (Réinjecté) : Rediriger bpf_stats_handler vers le gestionnaire d'entiers standard
+          sed -i '1s|^|#define bpf_stats_handler proc_dointvec\n|' kernel/sysctl.c
           
           if [ -f "drivers/firmware/efi/efi.c" ]; then
             sed -i 's/mmap_sem/mmap_lock/g' drivers/firmware/efi/efi.c
@@ -122,7 +125,7 @@ jobs:
           make O=out $CONFIG_TO_USE
           make O=out olddefconfig
           
-          # Compilation et diagnostic en cas de crash (en forçant le silence des warnings)
+          # Compilation et diagnostic en cas de crash
           make -j$(nproc --all) O=out KCFLAGS="-w" || make O=out KCFLAGS="-w"
 
       - name: Empaqueter avec AnyKernel3
