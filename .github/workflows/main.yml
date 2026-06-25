@@ -125,8 +125,8 @@ jobs:
           make O=out $CONFIG_TO_USE
           make O=out olddefconfig
           
-          # Compilation générale
-          make -j$(nproc --all) O=out KCFLAGS="-w"
+          # On compile sur un seul cœur pour que l'erreur s'affiche TOUT EN BAS des logs
+          make O=out
 
       - name: Empaqueter avec AnyKernel3
         run: |
