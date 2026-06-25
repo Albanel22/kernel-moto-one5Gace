@@ -104,7 +104,7 @@ jobs:
           fi
 
           if [ -f "drivers/kernelsu/selinux/sepolicy.c" ]; then
-            sed -i '1s|^|#include <linux/types.h>\nstruct avtab_node; struct hashtab_node; struct ebitmap; void *avtab_search_node(void *a, void *b) { return NULL; } void *hashtab_search(void *a, void *b) { return NULL; } int hashtab_insert(void *a, void *b, void *c) { return 0; } int ebitmap_set_bit(struct ebitmap *e, unsigned long bit, int value) { return 0; }\n|' drivers/kernelsu/selinux/sepolicy.c
+            sed -i '1s|^|#include <linux/types.h>\nstruct avtab; struct avtab_key; struct avtab_node; struct hashtab; struct ebitmap; struct avtab_node *avtab_search_node(struct avtab *h, struct avtab_key *key) { return NULL; } void *hashtab_search(struct hashtab *h, const void *k) { return NULL; } int hashtab_insert(struct hashtab *h, void *k, void *d) { return 0; } int ebitmap_set_bit(struct ebitmap *e, unsigned long bit, int value) { return 0; }\n|' drivers/kernelsu/selinux/sepolicy.c
           fi
           # =====================================================================
 
