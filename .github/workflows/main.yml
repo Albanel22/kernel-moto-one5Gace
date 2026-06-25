@@ -98,7 +98,7 @@ jobs:
             sed -i 's/CMD_SUSFS_HIDE_SUS_MNTS_FOR_ALL_PROCS/CMD_SUSFS_HIDE_SUS_MNTS_FOR_NON_SU_PROCS/g' drivers/kernelsu/supercalls.c
           fi
 
-          # 🛑 STUBS DE SÉCURITÉ, SUSFS ET EXT4 POUR LE LINKER (Dernière ligne droite)
+          # 🛑 STUBS DE SÉCURITÉ, SUSFS ET EXT4 POUR LE LINKER (Correction définitive du type double)
           if [ -f "drivers/kernelsu/selinux/rules.c" ]; then
             sed -i '1s|^|#include <linux/types.h>\nstruct selinux_state selinux_state; struct selinux_avc; void selinux_status_update_policyload(struct selinux_state *state, int seqno) {} int avc_ss_reset(struct selinux_avc *avc, u32 seqno) { return 0; } void selnl_notify_policyload(u32 seqno) {}\n|' drivers/kernelsu/selinux/rules.c
           fi
