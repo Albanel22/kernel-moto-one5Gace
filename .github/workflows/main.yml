@@ -84,11 +84,14 @@ jobs:
             sed -i '170s/^/#/' drivers/kernelsu/Kbuild
           fi
 
-          # Fix K : Forcer l'alignement des répertoires pour éliminer l'erreur "flask.h" manquante
+          # Fix K : Pré-générer les en-têtes SELinux fictifs mais valides pour satisfaire sidtab.h
           mkdir -p out/security/selinux/include
           mkdir -p security/selinux/include
-          touch out/security/selinux/flask.h out/security/selinux/avc_ss.h
-          touch security/selinux/include/flask.h security/selinux/include/avc_ss.h
+          
+          # On remplit flask.h avec les définitions minimales exigées
+          echo -e "#ifndef _SELINUX_FLASK_H_\n#define _SELINUX_FLASK_H_\n#define SECINITSID_NUM 27\n#endif" > out/security/selinux/flask.h
+          cp out/security/selinux/flask.h security/selinux/include/flask.h
+          touch out/security/selinux/avc_ss.h security/selinux/include/avc_ss.h
           
           if [ -f "drivers/kernelsu/Kbuild" ]; then
             sed -i '1s|^|ccflags-y += -I\$(srctree)/security/selinux -I\$(objtree)/security/selinux -I\$(srctree)/security/selinux/include -I\$(objtree)/security/selinux/include\n|' drivers/kernelsu/Kbuild
@@ -109,6 +112,8 @@ jobs:
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --disable CONFIG_TASKS_TRACE_RCU
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KALLSYMS
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KALLSYMS_ALL
+          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SECURITY_SELINUX
+          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --set-val CONFIG_SECURITY_SELINUX_SIDTAB_HASH_BITS 9
 
       - name: Compiler le Kernel (sm8250 / 4.19)
         run: |
@@ -128,7 +133,7 @@ jobs:
           make O=out $CONFIG_TO_USE
           make O=out olddefconfig
           
-          # Génération forcée des fichiers réels de SELinux avant d'attaquer la compilation globale
+          # Forcer la regénération propre des fichiers SELinux avant d'attaquer la compilation globale
           make O=out security/selinux/
           
           # Compilation générale
