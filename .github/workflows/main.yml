@@ -84,11 +84,10 @@ jobs:
             sed -i '170s/^/#/' drivers/kernelsu/Kbuild
           fi
 
-          # Fix K : Injecter les chemins SELinux en priorité absolue à la ligne 1 du Kbuild
+          # Fix K : Ajouter les chemins d'inclusion SELinux au sommet du Kbuild de KernelSU
           if [ -f "drivers/kernelsu/Kbuild" ]; then
             sed -i '1s|^|ccflags-y += -I\$(srctree)/security/selinux -I\$(objtree)/security/selinux -I\$(srctree)/security/selinux/include -I\$(objtree)/security/selinux/include\n|' drivers/kernelsu/Kbuild
           fi
-
 
           # =====================================================================
 
@@ -123,6 +122,11 @@ jobs:
           
           make O=out $CONFIG_TO_USE
           make O=out olddefconfig
+          
+          # 🚀 ÉTAPE CRUCIALE : Pré-générer les en-têtes SELinux avant la parallélisation
+          make O=out -j$(nproc --all) security/
+          
+          # Compilation générale
           make -j$(nproc --all) O=out KCFLAGS="-w"
 
       - name: Empaqueter avec AnyKernel3
