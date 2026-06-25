@@ -43,14 +43,20 @@ jobs:
           # 2. Créer le lien symbolique interne vers drivers/kernelsu
           ln -sf $(pwd)/KernelSU/kernel drivers/kernelsu
 
+          # Sauvegarder le fichier RCU sain d'origine de Motorola avant le patch
+          cp kernel/rcu/update.c kernel/rcu/update.c.bak
+
           # 3. Récupérer et appliquer le patch officiel SUSFS 4.19 pour le noyau
           curl -LSs "https://raw.githubusercontent.com/JackA1ltman/NonGKI_Kernel_Build_2nd/mainline/Patches/Patch/susfs_patch_to_4.19.patch" -o susfs.patch
           patch -p1 --fuzz=3 < susfs.patch || echo "Certains blocs du patch noyau ont été appliqués avec décalage"
 
+          # RESTAURATION : On remet le fichier RCU d'origine pour détruire le bug de build
+          mv kernel/rcu/update.c.bak kernel/rcu/update.c
+          echo -e "static inline void rcu_tasks_bootup_oddness(void) {}\nstatic inline void show_rcu_tasks_gp_kthreads(void) {}" > kernel/rcu/tasks.h
+
           # 4. Télécharger et exécuter le script d'Inline Hooks pour lier SUSFS à KernelSU
           curl -LSs "https://raw.githubusercontent.com/JackA1ltman/NonGKI_Kernel_Build_2nd/mainline/Patches/susfs_inline_hook_patches.sh" -o susfs_inline_hook_patches.sh
           chmod +x susfs_inline_hook_patches.sh
-          # Le script attend qu'on lui passe le chemin du dossier KernelSU
           ./susfs_inline_hook_patches.sh $(pwd)/KernelSU || echo "Application des inline hooks terminée"
 
           # 5. Lier proprement les fichiers de configuration du noyau
@@ -112,7 +118,7 @@ jobs:
           make O=out $CONFIG_TO_USE
           make O=out olddefconfig
           
-          # Compilation et diagnostic en cas de crash
+          # Compilation et diagnostic en cas de crash (en forçant le silence des warnings)
           make -j$(nproc --all) O=out KCFLAGS="-w" || make O=out KCFLAGS="-w"
 
       - name: Empaqueter avec AnyKernel3
