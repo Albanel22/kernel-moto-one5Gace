@@ -111,9 +111,9 @@ jobs:
             sed -i '1s|^|#include <linux/lsm_hooks.h>\nstruct security_hook_heads security_hook_heads; void security_add_hooks(struct security_hook_list *hooks, int count, char *lsm) {}\n|' drivers/kernelsu/lsm_hooks.c
           fi
 
-          # INJECTION DES STUBS DIRECTS POUR PATH_UMOUNT ET SUSFS DANS LES FICHIERS SOURCES DE KSU
+          # INJECTION DES STUBS RE-TYPÉS COMPATIBLES AVEC LES ATTENTES DE KERNELSU-NEXT
           if [ -f "drivers/kernelsu/supercalls.c" ]; then
-            sed -i '1s|^|#include <linux/types.h>\n#include <linux/fs.h>\nvoid susfs_add_try_umount(void *arg) {} void susfs_set_i_state_on_external_dir(struct dentry *dentry) {} void susfs_set_hide_sus_mnts_for_all_procs(bool enable) {}\nvoid susfs_reorder_mnt_id(void *mnt) {} void susfs_run_sus_path_loop(void) {}\nint path_umount(void *path, int flags) { return 0; }\nint susfs_try_umount(void) { return 0; }\n|' drivers/kernelsu/supercalls.c
+            sed -i '1s|^|#include <linux/types.h>\n#include <linux/fs.h>\nvoid susfs_add_try_umount(void *arg) {} void susfs_set_i_state_on_external_dir(struct dentry *dentry) {} void susfs_set_hide_sus_mnts_for_all_procs(bool enable) {}\nvoid susfs_reorder_mnt_id(void) {} void susfs_run_sus_path_loop(uid_t uid) {}\nint path_umount(void *path, int flags) { return 0; }\nvoid susfs_try_umount(uid_t uid) {}\n|' drivers/kernelsu/supercalls.c
           fi
 
           if [ -f "drivers/kernelsu/kernel_umount.c" ]; then
@@ -121,7 +121,7 @@ jobs:
           fi
 
           if [ -f "drivers/kernelsu/setuid_hook.c" ]; then
-            sed -i '1s|^|int susfs_try_umount(void) { return 0; } void susfs_reorder_mnt_id(void *mnt) {} void susfs_run_sus_path_loop(void) {}\n|' drivers/kernelsu/setuid_hook.c
+            sed -i '1s|^|#include <linux/types.h>\nvoid susfs_try_umount(uid_t uid) {} void susfs_reorder_mnt_id(void) {} void susfs_run_sus_path_loop(uid_t uid) {}\n|' drivers/kernelsu/setuid_hook.c
           fi
 
           # CORRECTION : Inclusion de l'en-tête crypto natif pour corriger le conflit de type de crypto_destroy_tfm
