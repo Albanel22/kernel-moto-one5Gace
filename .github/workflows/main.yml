@@ -65,16 +65,10 @@ jobs:
           grep -q "kernelsu" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "$DRIVER_MAKEFILE"
           grep -q "drivers/kernelsu/Kconfig" "$DRIVER_KCONFIG" || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" "$DRIVER_KCONFIG"
 
-          # =====================================================================
-          # 🔒 FIX ULTIME SELINUX (Force Kbuild à attendre la génération de flask.h)
-          # =====================================================================
+          # Fix SELinux : On donne tous les chemins possibles à KernelSU
           if [ -f "drivers/kernelsu/Makefile" ]; then
-            # Dit à GCC où chercher les fichiers d'en-têtes générés dynamiquement dans l'arbre 'out'
-            sed -i '1s|^|ccflags-y += -I$(srctree)/security/selinux -I$(srctree)/security/selinux/include -I$(objtree)/security/selinux/include\n|' drivers/kernelsu/Makefile
-            # Force légalement Kbuild à compiler security/selinux AVANT de toucher à ksu.o
-            printf "\n\$(obj)/ksu.o: \$(objtree)/security/selinux/include/flask.h\n" >> drivers/kernelsu/Makefile
+            sed -i '1s|^|ccflags-y += -I$(srctree)/security/selinux -I$(srctree)/security/selinux/include -I$(objtree)/security/selinux/include -I$(objtree)/security/selinux\n|' drivers/kernelsu/Makefile
           fi
-          # =====================================================================
 
           # =====================================================================
           # Correctifs spécifiques résiduels à la base Motorola + SUSFS
@@ -105,13 +99,13 @@ jobs:
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KALLSYMS
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KALLSYMS_ALL
           
-          # Activation des options SUSFS introduites par le patch
+          # Activation des options SUSFS
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SUSFS
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SUSFS_SUS_PATH
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SUSFS_SUS_MOUNT
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SUSFS_TRY_UMOUNT
           
-          # Mode Manual Hook pour la stabilité Non-GKI 4.19
+          # Mode Manual Hook para Non-GKI 4.19
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --disable CONFIG_KSU_TRACEPOINT_HOOK
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KSU_MANUAL_HOOK
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK
@@ -135,8 +129,21 @@ jobs:
           
           make O=out $CONFIG_TO_USE
           make O=out olddefconfig
+          make O=out prepare
           
-          # Compilation globale parallèle (Kbuild orchestrera l'attente intelligemment)
+          # =====================================================================
+          # ⚔️ COMPILATION MANUELLE DE L'OUTIL ET DES EN-TÊTES SELINUX
+          # =====================================================================
+          mkdir -p out/security/selinux/include
+          # On compile localement l'outil générateur d'en-têtes (mdp) de Linux
+          gcc -Isecurity/selinux/include scripts/selinux/mdp/mdp.c -o out/mdp
+          # On lui fait cracher flask.h et av_permissions.h directement là où Kbuild les attend !
+          ./out/mdp security/selinux/policy_capabilities out/security/selinux/include
+          # Copie de secours dans l'arborescence racine au cas où
+          cp out/security/selinux/include/*.h security/selinux/include/ 2>/dev/null || true
+          # =====================================================================
+          
+          # Lancement de la compilation globale
           make -j$(nproc --all) O=out KCFLAGS="-w" || make O=out KCFLAGS="-w"
 
       - name: Empaqueter avec AnyKernel3
