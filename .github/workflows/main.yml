@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
 
 env:
-  KERNEL_REPO: https://github.com/LineageOS/android_kernel_motorola_sm7250.git
-  KERNEL_BRANCH: lineage-21.0
+  KERNEL_REPO: https://github.com/LineageOS/android_kernel_motorola_sm8250
+  KERNEL_BRANCH: lineage-23.2
   KERNEL_CONFIG: vendor/kiev_defconfig
   ANYKERNEL_REPO: https://github.com/osm0sis/AnyKernel3.git
   ANYKERNEL_BRANCH: master
