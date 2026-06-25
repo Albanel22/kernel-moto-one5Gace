@@ -133,8 +133,8 @@ jobs:
           make O=out $CONFIG_TO_USE
           make O=out olddefconfig
           
-          # Compilation générale parallèle
-          make -j$(nproc --all) O=out KCFLAGS="-w"
+          # 🔬 COMPILATION SANS PARALLÉLISME (Pour attraper le bug exact en fin de log)
+          make O=out
 
       - name: Empaqueter avec AnyKernel3
         run: |
