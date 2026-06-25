@@ -97,6 +97,12 @@ jobs:
           if [ -f "drivers/kernelsu/supercalls.c" ]; then
             sed -i 's/CMD_SUSFS_HIDE_SUS_MNTS_FOR_ALL_PROCS/CMD_SUSFS_HIDE_SUS_MNTS_FOR_NON_SU_PROCS/g' drivers/kernelsu/supercalls.c
           fi
+
+          # 🛑 STUB DE SÉCURITÉ POUR LE LINKER (Fix rules.c)
+          # On injecte une version vide de la fonction manquante à la fin de rules.c pour clore l'édition de liens
+          if [ -f "drivers/kernelsu/selinux/rules.c" ]; then
+            printf "\nvoid selinux_status_update_policyload(struct selinux_state *state) {}\n" >> drivers/kernelsu/selinux/rules.c
+          fi
           # =====================================================================
 
           # Détection du defconfig Motorola
@@ -162,6 +168,9 @@ jobs:
           #define SECLASS_CAPABILITY                               4
           #define SECINITSID_NUM 27
           #define CONFIG_SECURITY_SELINUX_SIDTAB_HASH_BITS 9
+          
+          /* Déclaration anticipée de la structure pour éviter les warnings */
+          struct selinux_state;
           #endif
           EOF
           
