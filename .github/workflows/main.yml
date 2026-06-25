@@ -132,8 +132,8 @@ jobs:
           make O=out $CONFIG_TO_USE
           make O=out olddefconfig
           
-          # On remet le multi-cœur ET le flag "-w" pour étouffer le zèle du compilateur sur core.c
-          make -j$(nproc --all) O=out KCFLAGS="-w"
+          # Compilation rapide, et si échec, capture immédiate du bug sur un seul cœur
+          make -j$(nproc --all) O=out KCFLAGS="-w" || make O=out KCFLAGS="-w"
 
       - name: Empaqueter avec AnyKernel3
         run: |
