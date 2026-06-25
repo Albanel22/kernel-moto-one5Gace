@@ -1,4 +1,4 @@
-name: Build Kernel ReSukiSU - Motorola Kiev
+name: Build Kernel ReSukiSU/KSUN - Motorola Kiev
 
 on:
   workflow_dispatch:
@@ -33,81 +33,48 @@ jobs:
         run: |
           git clone ${{ env.KERNEL_REPO }} -b ${{ env.KERNEL_BRANCH }} --depth=1 kernel-source
 
-      - name: Injecter ReSukiSU
+      - name: Injecter la branche KernelSU-Next 4.19 Legacy + SUSFS
         run: |
           cd kernel-source
-          # Injection officielle et automatique de ReSukiSU
-          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s main
+          
+          # Cloner le dépôt spécifique trouvé en mode submodule/inline propre
+          git clone -b legacy https://github.com/wshamroukh/KernelSU-Next-SUSFS-kernelv4.19.git drivers/kernelsu
+          
+          # Lier les entrées de configuration au système de fichiers général
+          DRIVER_MAKEFILE="drivers/Makefile"
+          DRIVER_KCONFIG="drivers/Kconfig"
+          
+          grep -q "kernelsu" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "$DRIVER_MAKEFILE"
+          grep -q "drivers/kernelsu/Kconfig" "$DRIVER_KCONFIG" || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" "$DRIVER_KCONFIG"
 
           # =====================================================================
-          # 🛠️ CORRECTIFS DE COMPATIBILITÉ (MÉTHODE PAR INTERCEPTION) 🛠️
+          # Correctifs requis résiduels spécifiques au code de base de Motorola
           # =====================================================================
-
-          # Fix A : Initialiser la variable de temps Motorola manquante
+          # Fix A : Variable de temps Motorola
           sed -i '1s|^|int alarm_debug = 0;\n|' kernel/time/alarmtimer.c
 
-          # Fix B : Déclarer directement le type compat_uptr_t manquant au sommet de filter.h
+          # Fix B : Type compat_uptr_t manquant
           sed -i '1s|^|typedef unsigned int compat_uptr_t;\n|' include/linux/filter.h
 
-          # Fix C : Créer des stubs RCU pour éviter le crash de rcu/update.c
-          echo -e "static inline void rcu_tasks_bootup_oddness(void) {}\nstatic inline void show_rcu_tasks_gp_kthreads(void) {}" > kernel/rcu/tasks.h
-
-          # Fix D : Nettoyer la configuration forcée de KernelSU si elle s'exécute en amont
-          if [ -f "KernelSU/Kconfig" ]; then
-            sed -i 's/select TASKS_RCU//g' KernelSU/Kconfig
-            sed -i 's/select TASKS_TRACE_RCU//g' KernelSU/Kconfig
-          fi
-
-          # NOTE : Fix E supprimé (NOHZ_KICK_MASK générait un conflit dans kernel/sched/core.c)
-
-          # Fix F : Rediriger bpf_stats_handler vers le gestionnaire d'entiers standard si non défini
-          sed -i '1s|^|#define bpf_stats_handler proc_dointvec\n|' kernel/sysctl.c
-
-          # Fix G : Adapter l'ancien appel mmap_sem vers mmap_lock pour le sous-système EFI de Motorola
+          # Fix G : Ajustement mmap_sem vers mmap_lock pour le firmware EFI de Motorola
           if [ -f "drivers/firmware/efi/efi.c" ]; then
             sed -i 's/mmap_sem/mmap_lock/g' drivers/firmware/efi/efi.c
           fi
-
-          # Fix H : Injecter l'exportation du symbole requis au cas où
-          if [ -f "security/selinux/selinuxfs.c" ]; then
-            echo -e "\n#include <linux/export.h>\nextern const struct file_operations sel_handle_status_ops;\nEXPORT_SYMBOL_GPL(sel_handle_status_ops);" >> security/selinux/selinuxfs.c
-          fi
-
-          # Fix I : Désactiver de force le script de vérification de ReSukiSU
-          if [ -f "KernelSU/kernel/tools/static_export_check.mk" ]; then
-            echo -e "all:\n\t@echo 'Vérification ReSukiSU contournée avec succès'\n" > KernelSU/kernel/tools/static_export_check.mk
-          fi
-
-          # Fix J : Forcer le contournement de la vérification Non-GKI (Ligne 170 du Kbuild)
-          if [ -f "drivers/kernelsu/Kbuild" ]; then
-            sed -i '170s/^/#/' drivers/kernelsu/Kbuild
-          fi
-
-          # Fix L : Neutraliser la vérification post-compilation check_symbol
-          if [ -f "drivers/kernelsu/Makefile" ]; then
-            sed -i 's|\./check_symbol.*|echo "Verification passee avec succes"|g' drivers/kernelsu/Makefile
-          fi
-          if [ -f "KernelSU/kernel/Makefile" ]; then
-            sed -i 's|\./check_symbol.*|echo "Verification passee avec succes"|g' KernelSU/kernel/Makefile
-          fi
-
           # =====================================================================
 
-          # Détection et préparation du defconfig
+          # Détection du defconfig Motorola
           CONFIG_TO_USE="${{ env.KERNEL_CONFIG }}"
           if [ ! -f "arch/arm64/configs/$CONFIG_TO_USE" ] && [ -f "arch/arm64/configs/vendor/kiev-perf_defconfig" ]; then
             CONFIG_TO_USE="vendor/kiev-perf_defconfig"
           fi
           
-          # Forçage propre des options via l'outil du noyau
+          # Forçage des options via l'outil du noyau
           chmod +x scripts/config
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KSU
-          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --disable CONFIG_TASKS_RCU
-          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --disable CONFIG_TASKS_TRACE_RCU
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KALLSYMS
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KALLSYMS_ALL
           
-          # Configuration en mode MANUAL HOOK pour ton noyau 4.19 Non-GKI
+          # Activation forcée du mode Manual Hook (Parfait pour les noyaux 4.19 Non-GKI)
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --disable CONFIG_KSU_TRACEPOINT_HOOK
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KSU_MANUAL_HOOK
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK
@@ -132,8 +99,8 @@ jobs:
           make O=out $CONFIG_TO_USE
           make O=out olddefconfig
           
-          # Compilation rapide, et si échec, capture immédiate du bug sur un seul cœur
-          make -j$(nproc --all) O=out KCFLAGS="-w" || make O=out KCFLAGS="-w"
+          # Compilation propre en parallèle en masquant les warnings mineurs
+          make -j$(nproc --all) O=out KCFLAGS="-w"
 
       - name: Empaqueter avec AnyKernel3
         run: |
