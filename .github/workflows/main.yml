@@ -106,6 +106,10 @@ jobs:
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KALLSYMS
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KALLSYMS_ALL
           
+          # 🔐 FORCE SECCOMP TO FIX APP_PROFILE.C
+          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SECCOMP
+          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SECCOMP_FILTER
+          
           # Activation des options SUSFS
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SUSFS
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SUSFS_SUS_PATH
@@ -139,7 +143,7 @@ jobs:
           make O=out prepare
           
           # =====================================================================
-          # 🦏 EN-TÊTES COMPATIBLES AVEC LA CONFIGURATION HASH DE SIDTAB.H
+          # 🦏 EN-TÊTES COMPATIBLES
           # =====================================================================
           mkdir -p security/selinux/include
           mkdir -p out/security/selinux/include
@@ -152,8 +156,6 @@ jobs:
           #define SECLASS_SYSTEM                                   3
           #define SECLASS_CAPABILITY                               4
           #define SECINITSID_NUM 27
-          
-          /* Correction pour sidtab.h */
           #define CONFIG_SECURITY_SELINUX_SIDTAB_HASH_BITS 9
           #endif
           EOF
