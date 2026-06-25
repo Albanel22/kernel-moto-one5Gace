@@ -84,6 +84,11 @@ jobs:
             sed -i '170s/^/#/' drivers/kernelsu/Kbuild
           fi
 
+          # Fix K : Rendre les en-têtes SELinux (flask.h) accessibles globalement pour ReSukiSU
+          mkdir -p out/security/selinux
+          ln -sf ../../../security/selinux/flask.h out/security/selinux/flask.h
+          sed -i 's|#include "flask.h"|#include "../../../security/selinux/flask.h"|g' security/selinux/include/security.h
+
           # =====================================================================
 
           # Détection et préparation du defconfig
