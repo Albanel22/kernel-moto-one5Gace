@@ -33,30 +33,34 @@ jobs:
         run: |
           git clone ${{ env.KERNEL_REPO }} -b ${{ env.KERNEL_BRANCH }} --depth=1 kernel-source
 
-      - name: Injecter la branche KernelSU-Next 4.19 Legacy + Patch SUSFS
+      - name: Injecter KernelSU-Next, Patch SUSFS et Inline Hooks
         run: |
           cd kernel-source
           
           # 1. Cloner le dépôt KernelSU-Next sous "KernelSU"
           git clone -b legacy https://github.com/wshamroukh/KernelSU-Next-SUSFS-kernelv4.19.git KernelSU
           
-          # 2. Créer le lien symbolique interne
+          # 2. Créer le lien symbolique interne vers drivers/kernelsu
           ln -sf $(pwd)/KernelSU/kernel drivers/kernelsu
 
-          # 3. Récupérer et appliquer le patch officiel SUSFS 4.19 pour les Noyaux Non-GKI
+          # 3. Récupérer et appliquer le patch officiel SUSFS 4.19 pour le noyau
           curl -LSs "https://raw.githubusercontent.com/JackA1ltman/NonGKI_Kernel_Build_2nd/mainline/Patches/Patch/susfs_patch_to_4.19.patch" -o susfs.patch
-          
-          # On applique le patch en ignorant les légers décalages de lignes (--fuzz=3)
-          patch -p1 --fuzz=3 < susfs.patch || echo "Certains blocs du patch ont été appliqués avec décalage ou manuellement"
+          patch -p1 --fuzz=3 < susfs.patch || echo "Certains blocs du patch noyau ont été appliqués avec décalage"
 
-          # 4. Lier proprement les fichiers de configuration du noyau
+          # 4. Télécharger et exécuter le script d'Inline Hooks pour lier SUSFS à KernelSU
+          curl -LSs "https://raw.githubusercontent.com/JackA1ltman/NonGKI_Kernel_Build_2nd/mainline/Patches/susfs_inline_hook_patches.sh" -o susfs_inline_hook_patches.sh
+          chmod +x susfs_inline_hook_patches.sh
+          # Le script attend qu'on lui passe le chemin du dossier KernelSU
+          ./susfs_inline_hook_patches.sh $(pwd)/KernelSU || echo "Application des inline hooks terminée"
+
+          # 5. Lier proprement les fichiers de configuration du noyau
           DRIVER_MAKEFILE="drivers/Makefile"
           DRIVER_KCONFIG="drivers/Kconfig"
           grep -q "kernelsu" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "$DRIVER_MAKEFILE"
           grep -q "drivers/kernelsu/Kconfig" "$DRIVER_KCONFIG" || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" "$DRIVER_KCONFIG"
 
           # =====================================================================
-          # Correctifs spécifiques résiduels à la base Motorola non couverts par le patch
+          # Correctifs spécifiques résiduels à la base Motorola
           # =====================================================================
           sed -i '1s|^|int alarm_debug = 0;\n|' kernel/time/alarmtimer.c
           sed -i '1s|^|typedef unsigned int compat_uptr_t;\n|' include/linux/filter.h
@@ -77,7 +81,13 @@ jobs:
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KALLSYMS
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KALLSYMS_ALL
           
-          # Activation forcée du mode Manual Hook (Idéal Non-GKI)
+          # Activation des options SUSFS introduites par le patch
+          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SUSFS
+          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SUSFS_SUS_PATH
+          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SUSFS_SUS_MOUNT
+          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SUSFS_TRY_UMOUNT
+          
+          # Mode Manual Hook pour la stabilité Non-GKI 4.19
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --disable CONFIG_KSU_TRACEPOINT_HOOK
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KSU_MANUAL_HOOK
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK
@@ -102,7 +112,7 @@ jobs:
           make O=out $CONFIG_TO_USE
           make O=out olddefconfig
           
-          # Compilation rapide, avec repli automatique sur un seul cœur pour voir les détails en cas de pépin
+          # Compilation et diagnostic en cas de crash
           make -j$(nproc --all) O=out KCFLAGS="-w" || make O=out KCFLAGS="-w"
 
       - name: Empaqueter avec AnyKernel3
