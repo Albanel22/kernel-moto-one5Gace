@@ -58,6 +58,9 @@ jobs:
             sed -i 's/select TASKS_TRACE_RCU//g' KernelSU/Kconfig
           fi
 
+          # Fix E : Définir la constante NOHZ_KICK_MASK manquante dans le scheduler de Motorola
+          sed -i '1s|^|#define NOHZ_KICK_MASK 0x1\n|' kernel/sched/core.c
+
           # =====================================================================
 
           # Détection et préparation du defconfig
