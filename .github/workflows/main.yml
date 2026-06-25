@@ -132,21 +132,26 @@ jobs:
           make O=out prepare
           
           # =====================================================================
-          # ⚔️ BYPASS ET GÉNÉRATION DES CAPABILITÉS SELINUX SELON TON FICHIER
+          # ⚔️ COMPILATION DU MDP ET RE-ROUTAGE DE LA GÉNÉRATION DES HEADERS
           # =====================================================================
           # Désactivation de la sécurité du script mdp qui lève l'erreur #error
           sed -i 's/#error New capability defined, please update COMMON_CAP2_PERMS./\/\/ Bypass cap verification/g' security/selinux/include/classmap.h
           
-          # Générer le fichier texte de capabilities attendu par mdp
+          # Création physique complète des dossiers cibles dans out/
           mkdir -p out/security/selinux/include
-          printf "netpeer\nopenperm\nextsockclass\nalwaysnetwork\ncgroupseclabel\nnnp_nosuid_transition\ngenfs_seclabel_symlinks\nioctl_skip_cloexec\nuserspace_initial_context\nnetlink_xperm\nnetif_wildcard\ngenfs_seclabel_wildcard\nfunctionfs_seclabel\nmemfd_class\n" > out/policy_capabilities.txt
           
-          # On compile l'outil mdp
-          gcc -Isecurity/selinux/include scripts/selinux/mdp/mdp.c -o out/mdp
+          # Écriture de la liste des capacités
+          printf "netpeer\nopenperm\nextsockclass\nalwaysnetwork\ncgroupseclabel\nnnp_nosuid_transition\ngenfs_seclabel_symlinks\nioctl_skip_cloexec\nuserspace_initial_context\nnetlink_xperm\nnetif_wildcard\ngenfs_seclabel_wildcard\nfunctionfs_seclabel\nmemfd_class\n" > policy_capabilities.txt
           
-          # Génération forcée avec notre liste propre
-          ./out/mdp out/policy_capabilities.txt out/security/selinux/include
-          cp out/security/selinux/include/*.h security/selinux/include/ 2>/dev/null || true
+          # Compilation globale de mdp
+          gcc -Isecurity/selinux/include scripts/selinux/mdp/mdp.c -o mdp_gen
+          
+          # On exécute le générateur en lui passant le fichier factice de configuration requis pour le 2ème argument
+          ./mdp_gen policy_capabilities.txt security/selinux/initial_sid_contexts
+          
+          # Maintenant que flask.h et av_permissions.h sont créés localement, on les distribue là où le build en a besoin
+          cp flask.h av_permissions.h security/selinux/include/
+          cp flask.h av_permissions.h out/security/selinux/include/
           # =====================================================================
           
           # Lancement de la compilation globale finale
