@@ -85,6 +85,15 @@ jobs:
           if [ -f "drivers/firmware/efi/efi.c" ]; then
             sed -i 's/mmap_sem/mmap_lock/g' drivers/firmware/efi/efi.c
           fi
+
+          # 🚨 CORRECTION RADICALE LSM BLOBS DANS OBJSEC.H 🚨
+          # Comme cred->security, file->f_security et inode->i_security n'existent pas sur ce noyau empilé, 
+          # nous réécrivons directement les accesseurs inline pour renvoyer NULL ou utiliser les blobs globaux s'ils manquent.
+          if [ -f "security/selinux/include/objsec.h" ]; then
+            sed -i 's/return cred->security.*/return NULL;/g' security/selinux/include/objsec.h
+            sed -i 's/return file->f_security.*/return NULL;/g' security/selinux/include/objsec.h
+            sed -i '/if (unlikely(!inode->i_security))/,/return inode->i_security.*/c\return NULL;' security/selinux/include/objsec.h
+          fi
           # =====================================================================
 
           # Détection du defconfig Motorola
@@ -137,7 +146,6 @@ jobs:
           mkdir -p security/selinux/include
           mkdir -p out/security/selinux/include
           
-          # Flask.h enrichi avec les SID initiaux requis par sidtab.h
           cat << 'EOF' > flask.h
           #ifndef _SELINUX_FLASK_H_
           #define _SELINUX_FLASK_H_
@@ -145,13 +153,10 @@ jobs:
           #define SECLASS_PROCESS                                  2
           #define SECLASS_SYSTEM                                   3
           #define SECLASS_CAPABILITY                               4
-          
-          /* Initial SIDs definition to fix sidtab.h */
           #define SECINITSID_NUM 27
           #endif
           EOF
           
-          # Av_permissions.h de secours
           cat << 'EOF' > av_permissions.h
           #ifndef _SELINUX_AV_PERMISSIONS_H_
           #define _SELINUX_AV_PERMISSIONS_H_
