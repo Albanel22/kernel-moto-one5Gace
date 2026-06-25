@@ -37,10 +37,13 @@ jobs:
         run: |
           cd kernel-source
           
-          # Cloner le dépôt spécifique trouvé en mode submodule/inline propre
-          git clone -b legacy https://github.com/wshamroukh/KernelSU-Next-SUSFS-kernelv4.19.git drivers/kernelsu
+          # 1. Cloner le dépôt à la racine sous "KernelSU"
+          git clone -b legacy https://github.com/wshamroukh/KernelSU-Next-SUSFS-kernelv4.19.git KernelSU
           
-          # Lier les entrées de configuration au système de fichiers général
+          # 2. Créer le lien symbolique vers le bon dossier interne (kernel/) vers drivers/kernelsu
+          ln -sf $(pwd)/KernelSU/kernel drivers/kernelsu
+
+          # 3. Lier proprement les fichiers de configuration du noyau
           DRIVER_MAKEFILE="drivers/Makefile"
           DRIVER_KCONFIG="drivers/Kconfig"
           
@@ -99,7 +102,7 @@ jobs:
           make O=out $CONFIG_TO_USE
           make O=out olddefconfig
           
-          # Compilation propre en parallèle en masquant les warnings mineurs
+          # Compilation propre en parallèle
           make -j$(nproc --all) O=out KCFLAGS="-w"
 
       - name: Empaqueter avec AnyKernel3
