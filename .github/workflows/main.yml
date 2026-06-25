@@ -98,10 +98,12 @@ jobs:
             sed -i 's/CMD_SUSFS_HIDE_SUS_MNTS_FOR_ALL_PROCS/CMD_SUSFS_HIDE_SUS_MNTS_FOR_NON_SU_PROCS/g' drivers/kernelsu/supercalls.c
           fi
 
-          # 🛑 STUB DE SÉCURITÉ POUR LE LINKER (Fix rules.c)
-          # Signature exacte avec l'argument int corrigé
+          # 🛑 STUBS DE SÉCURITÉ POUR LE LINKER (Fix rules.c)
+          # On ajoute les déclarations vides requises par l'édition de liens globale
           if [ -f "drivers/kernelsu/selinux/rules.c" ]; then
             printf "\nvoid selinux_status_update_policyload(struct selinux_state *state, int seqno) {}\n" >> drivers/kernelsu/selinux/rules.c
+            printf "void avc_ss_reset(u32 seqno) {}\n" >> drivers/kernelsu/selinux/rules.c
+            printf "void selnl_notify_policyload(u32 seqno) {}\n" >> drivers/kernelsu/selinux/rules.c
           fi
           # =====================================================================
 
