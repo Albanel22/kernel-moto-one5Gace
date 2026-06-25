@@ -64,6 +64,11 @@ jobs:
           # Fix F : Rediriger bpf_stats_handler vers le gestionnaire d'entiers standard si non défini
           sed -i '1s|^|#define bpf_stats_handler proc_dointvec\n|' kernel/sysctl.c
 
+          # Fix G : Adapter l'ancien appel mmap_sem vers mmap_lock pour le sous-système EFI de Motorola
+          if [ -f "drivers/firmware/efi/efi.c" ]; then
+            sed -i 's/mmap_sem/mmap_lock/g' drivers/firmware/efi/efi.c
+          fi
+
           # =====================================================================
 
           # Détection et préparation du defconfig
