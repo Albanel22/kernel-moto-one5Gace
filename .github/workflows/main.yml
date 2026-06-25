@@ -74,7 +74,7 @@ jobs:
             echo -e "\n#include <linux/export.h>\nextern const struct file_operations sel_handle_status_ops;\nEXPORT_SYMBOL_GPL(sel_handle_status_ops);" >> security/selinux/selinuxfs.c
           fi
 
-          # Fix I : Désactiver de force le script de vérification strict de ReSukiSU qui bloque le build
+          # Fix I : Désactiver de force le script de vérification de ReSukiSU
           if [ -f "KernelSU/kernel/tools/static_export_check.mk" ]; then
             echo -e "all:\n\t@echo 'Vérification ReSukiSU contournée avec succès'\n" > KernelSU/kernel/tools/static_export_check.mk
           fi
@@ -82,17 +82,6 @@ jobs:
           # Fix J : Forcer le contournement de la vérification Non-GKI (Ligne 170 du Kbuild)
           if [ -f "drivers/kernelsu/Kbuild" ]; then
             sed -i '170s/^/#/' drivers/kernelsu/Kbuild
-          fi
-
-          # Fix K : Pré-générer les en-têtes SELinux fictifs mais valides pour satisfaire sidtab.h
-          mkdir -p out/security/selinux/include
-          mkdir -p security/selinux/include
-          echo -e "#ifndef _SELINUX_FLASK_H_\n#define _SELINUX_FLASK_H_\n#define SECINITSID_NUM 27\n#endif" > out/security/selinux/flask.h
-          cp out/security/selinux/flask.h security/selinux/include/flask.h
-          touch out/security/selinux/avc_ss.h security/selinux/include/avc_ss.h
-          
-          if [ -f "drivers/kernelsu/Kbuild" ]; then
-            sed -i '1s|^|ccflags-y += -I\$(srctree)/security/selinux -I\$(objtree)/security/selinux -I\$(srctree)/security/selinux/include -I\$(objtree)/security/selinux/include\n|' drivers/kernelsu/Kbuild
           fi
 
           # =====================================================================
@@ -103,13 +92,20 @@ jobs:
             CONFIG_TO_USE="vendor/kiev-perf_defconfig"
           fi
           
-          # Forçage propre des options de configuration de base via l'outil système du noyau
+          # Forçage propre des options via l'outil du noyau
           chmod +x scripts/config
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KSU
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --disable CONFIG_TASKS_RCU
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --disable CONFIG_TASKS_TRACE_RCU
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KALLSYMS
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KALLSYMS_ALL
+          
+          # 🚀 PASSAGE EN MANUAL HOOK POUR LES NOYAUX 4.19 NON-GKI
+          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --disable CONFIG_KSU_TRACEPOINT_HOOK
+          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KSU_MANUAL_HOOK
+          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK
+          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK
+          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK
 
       - name: Compiler le Kernel (sm8250 / 4.19)
         run: |
@@ -129,11 +125,8 @@ jobs:
           make O=out $CONFIG_TO_USE
           make O=out olddefconfig
           
-          # Forcer la regénération propre des fichiers SELinux avant d'attaquer la compilation globale
-          make O=out security/selinux/
-          
-          # Compilation générale (avec injection de la constante de hachage manquante)
-          make -j$(nproc --all) O=out KCFLAGS="-w -DCONFIG_SECURITY_SELINUX_SIDTAB_HASH_BITS=9"
+          # Compilation générale
+          make -j$(nproc --all) O=out KCFLAGS="-w"
 
       - name: Empaqueter avec AnyKernel3
         run: |
