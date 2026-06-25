@@ -61,6 +61,9 @@ jobs:
           # Fix E : Définir la constante NOHZ_KICK_MASK manquante dans le scheduler de Motorola
           sed -i '1s|^|#define NOHZ_KICK_MASK 0x1\n|' kernel/sched/core.c
 
+          # Fix F : Rediriger bpf_stats_handler vers le gestionnaire d'entiers standard si non défini
+          sed -i '1s|^|#define bpf_stats_handler proc_dointvec\n|' kernel/sysctl.c
+
           # =====================================================================
 
           # Détection et préparation du defconfig
