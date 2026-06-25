@@ -65,10 +65,16 @@ jobs:
           grep -q "kernelsu" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "$DRIVER_MAKEFILE"
           grep -q "drivers/kernelsu/Kconfig" "$DRIVER_KCONFIG" || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" "$DRIVER_KCONFIG"
 
-          # Fix SELinux étendu dans le Makefile de KernelSU (on cible les répertoires générés dans out)
+          # =====================================================================
+          # 🔒 FIX ULTIME SELINUX (Force Kbuild à attendre la génération de flask.h)
+          # =====================================================================
           if [ -f "drivers/kernelsu/Makefile" ]; then
+            # Dit à GCC où chercher les fichiers d'en-têtes générés dynamiquement dans l'arbre 'out'
             sed -i '1s|^|ccflags-y += -I$(srctree)/security/selinux -I$(srctree)/security/selinux/include -I$(objtree)/security/selinux/include\n|' drivers/kernelsu/Makefile
+            # Force légalement Kbuild à compiler security/selinux AVANT de toucher à ksu.o
+            printf "\n\$(obj)/ksu.o: \$(objtree)/security/selinux/include/flask.h\n" >> drivers/kernelsu/Makefile
           fi
+          # =====================================================================
 
           # =====================================================================
           # Correctifs spécifiques résiduels à la base Motorola + SUSFS
@@ -130,11 +136,7 @@ jobs:
           make O=out $CONFIG_TO_USE
           make O=out olddefconfig
           
-          # 🔐 FORCE GENERATION SELINUX HEADERS (La clé du problème)
-          make O=out prepare
-          make O=out security/selinux/
-          
-          # Compilation globale finale
+          # Compilation globale parallèle (Kbuild orchestrera l'attente intelligemment)
           make -j$(nproc --all) O=out KCFLAGS="-w" || make O=out KCFLAGS="-w"
 
       - name: Empaqueter avec AnyKernel3
