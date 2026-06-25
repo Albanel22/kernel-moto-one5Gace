@@ -50,7 +50,7 @@ jobs:
           curl -LSs "https://raw.githubusercontent.com/JackA1ltman/NonGKI_Kernel_Build_2nd/mainline/Patches/Patch/susfs_patch_to_4.19.patch" -o susfs.patch
           patch -p1 --fuzz=3 < susfs.patch || echo "Certains blocs du patch noyau ont été appliqués avec décalage"
 
-          # RESTAURATION : On remet le fichier RCU d'origine pour détruire le bug de build
+          # RESTAURATION RCU : On remet le fichier RCU d'origine pour détruire le bug de build
           mv kernel/rcu/update.c.bak kernel/rcu/update.c
           echo -e "static inline void rcu_tasks_bootup_oddness(void) {}\nstatic inline void show_rcu_tasks_gp_kthreads(void) {}" > kernel/rcu/tasks.h
 
@@ -66,10 +66,14 @@ jobs:
           grep -q "drivers/kernelsu/Kconfig" "$DRIVER_KCONFIG" || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" "$DRIVER_KCONFIG"
 
           # =====================================================================
-          # Correctifs spécifiques résiduels à la base Motorola
+          # Correctifs spécifiques résiduels à la base Motorola + SUSFS
           # =====================================================================
           sed -i '1s|^|int alarm_debug = 0;\n|' kernel/time/alarmtimer.c
           sed -i '1s|^|typedef unsigned int compat_uptr_t;\n|' include/linux/filter.h
+          
+          # Fix E (Réinjecté) : Définir la constante demandée par SUSFS dans le scheduler de Motorola
+          sed -i '1s|^|#define NOHZ_KICK_MASK 0x1\n|' kernel/sched/core.c
+          
           if [ -f "drivers/firmware/efi/efi.c" ]; then
             sed -i 's/mmap_sem/mmap_lock/g' drivers/firmware/efi/efi.c
           fi
