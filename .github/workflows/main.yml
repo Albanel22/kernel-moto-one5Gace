@@ -65,9 +65,9 @@ jobs:
           grep -q "kernelsu" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "$DRIVER_MAKEFILE"
           grep -q "drivers/kernelsu/Kconfig" "$DRIVER_KCONFIG" || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" "$DRIVER_KCONFIG"
 
-          # Fix SELinux : Forcer l'inclusion des en-têtes générés (flask.h) dans KernelSU
+          # Fix SELinux : Ajouter les dossiers de recherche d'en-têtes (srctree et objtree pour flask.h généré)
           if [ -f "drivers/kernelsu/Makefile" ]; then
-            sed -i '1s|^|ccflags-y += -I$(srctree)/security/selinux -I$(srctree)/security/selinux/include -I$(objtree)/security/selinux\n|' drivers/kernelsu/Makefile
+            sed -i '1s|^|ccflags-y += -I$(srctree)/security/selinux -I$(srctree)/security/selinux/include -I$(objtree)/security/selinux/include\n|' drivers/kernelsu/Makefile
           fi
 
           # =====================================================================
@@ -130,7 +130,11 @@ jobs:
           make O=out $CONFIG_TO_USE
           make O=out olddefconfig
           
-          # Compilation et diagnostic en cas de crash
+          # 🛑 ÉTAPE DE SÉCURITÉ : On force la génération des scripts et de SELinux d'abord
+          make O=out prepare
+          make -j$(nproc --all) O=out security/selinux/
+          
+          # Compilation finale globale et diagnostic en cas de crash
           make -j$(nproc --all) O=out KCFLAGS="-w" || make O=out KCFLAGS="-w"
 
       - name: Empaqueter avec AnyKernel3
