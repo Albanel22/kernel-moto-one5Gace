@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
 
 env:
-  KERNEL_REPO: https://github.com/LineageOS/android_kernel_motorola_sm8250.git
-  KERNEL_BRANCH: lineage-23.0
+  KERNEL_REPO: https://github.com/LineageOS/android_kernel_motorola_sm7250.git
+  KERNEL_BRANCH: lineage-21.0
   KERNEL_CONFIG: vendor/kiev_defconfig
   ANYKERNEL_REPO: https://github.com/osm0sis/AnyKernel3.git
   ANYKERNEL_BRANCH: master
@@ -29,7 +29,7 @@ jobs:
           git sparse-checkout set clang-r522817
           echo "$(pwd)/clang-r522817/bin" >> $GITHUB_PATH
 
-      - name: Cloner les sources du Kernel Motorola (sm8250 unifié)
+      - name: Cloner les sources du Kernel Motorola (sm7250 officiel)
         run: |
           git clone ${{ env.KERNEL_REPO }} -b ${{ env.KERNEL_BRANCH }} --depth=1 kernel-source
 
@@ -149,7 +149,7 @@ jobs:
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK
 
-      - name: Compiler le Kernel (sm8250 / 4.19)
+      - name: Compiler le Kernel (sm7250 / 4.19)
         run: |
           cd kernel-source
           export ARCH=arm64
@@ -207,7 +207,13 @@ jobs:
       - name: Empaqueter avec AnyKernel3
         run: |
           git clone ${{ env.ANYKERNEL_REPO }} -b ${{ env.ANYKERNEL_BRANCH }} AnyKernel3
-          cp kernel-source/out/arch/arm64/boot/Image AnyKernel3/
+          
+          # Correction : Utilisation du fichier Image.gz obligatoire pour Qualcomm Snapdragon
+          if [ -f kernel-source/out/arch/arm64/boot/Image.gz ]; then
+            cp kernel-source/out/arch/arm64/boot/Image.gz AnyKernel3/Image.gz
+          else
+            cp kernel-source/out/arch/arm64/boot/Image AnyKernel3/Image
+          fi
           
           cd AnyKernel3
           sed -i 's/device.name1=maguro/device.name1=kiev/g' anykernel.sh
