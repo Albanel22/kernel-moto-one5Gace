@@ -65,6 +65,11 @@ jobs:
           grep -q "kernelsu" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "$DRIVER_MAKEFILE"
           grep -q "drivers/kernelsu/Kconfig" "$DRIVER_KCONFIG" || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" "$DRIVER_KCONFIG"
 
+          # Fix SELinux : Forcer l'inclusion des en-têtes générés (flask.h) dans KernelSU
+          if [ -f "drivers/kernelsu/Makefile" ]; then
+            sed -i '1s|^|ccflags-y += -I$(srctree)/security/selinux -I$(srctree)/security/selinux/include -I$(objtree)/security/selinux\n|' drivers/kernelsu/Makefile
+          fi
+
           # =====================================================================
           # Correctifs spécifiques résiduels à la base Motorola + SUSFS
           # =====================================================================
@@ -74,7 +79,7 @@ jobs:
           # Fix E : Définir la constante demandée par SUSFS dans le scheduler de Motorola
           sed -i '1s|^|#define NOHZ_KICK_MASK 0x1\n|' kernel/sched/core.c
           
-          # Fix F (Réinjecté) : Rediriger bpf_stats_handler vers le gestionnaire d'entiers standard
+          # Fix F : Rediriger bpf_stats_handler vers le gestionnaire d'entiers standard
           sed -i '1s|^|#define bpf_stats_handler proc_dointvec\n|' kernel/sysctl.c
           
           if [ -f "drivers/firmware/efi/efi.c" ]; then
