@@ -17,7 +17,7 @@ jobs:
       - name: Nettoyer et installer les dépendances de compilation
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc bison build-essential ccache curl flex git gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi gcc-12-aarch64-linux-gnu gcc-12-arm-linux-gnueabi
+          sudo apt-get install -y bc bison build-essential ccache curl flex git gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi gcc-12-aarch64-linux-gnu gcc-12-arm-linux-gnueabi patch
           
           sudo ln -sf /usr/bin/aarch64-linux-gnu-gcc-12 /usr/bin/aarch64-linux-gnu-gcc
           sudo ln -sf /usr/bin/arm-linux-gnueabi-gcc-12 /usr/bin/arm-linux-gnueabi-gcc
@@ -33,36 +33,33 @@ jobs:
         run: |
           git clone ${{ env.KERNEL_REPO }} -b ${{ env.KERNEL_BRANCH }} --depth=1 kernel-source
 
-      - name: Injecter la branche KernelSU-Next 4.19 Legacy + SUSFS
+      - name: Injecter la branche KernelSU-Next 4.19 Legacy + Patch SUSFS
         run: |
           cd kernel-source
           
-          # 1. Cloner le dépôt à la racine sous "KernelSU"
+          # 1. Cloner le dépôt KernelSU-Next sous "KernelSU"
           git clone -b legacy https://github.com/wshamroukh/KernelSU-Next-SUSFS-kernelv4.19.git KernelSU
           
-          # 2. Créer le lien symbolique vers le bon dossier interne (kernel/) vers drivers/kernelsu
+          # 2. Créer le lien symbolique interne
           ln -sf $(pwd)/KernelSU/kernel drivers/kernelsu
 
-          # 3. Lier proprement les fichiers de configuration du noyau
+          # 3. Récupérer et appliquer le patch officiel SUSFS 4.19 pour les Noyaux Non-GKI
+          curl -LSs "https://raw.githubusercontent.com/JackA1ltman/NonGKI_Kernel_Build_2nd/mainline/Patches/Patch/susfs_patch_to_4.19.patch" -o susfs.patch
+          
+          # On applique le patch en ignorant les légers décalages de lignes (--fuzz=3)
+          patch -p1 --fuzz=3 < susfs.patch || echo "Certains blocs du patch ont été appliqués avec décalage ou manuellement"
+
+          # 4. Lier proprement les fichiers de configuration du noyau
           DRIVER_MAKEFILE="drivers/Makefile"
           DRIVER_KCONFIG="drivers/Kconfig"
-          
           grep -q "kernelsu" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "$DRIVER_MAKEFILE"
           grep -q "drivers/kernelsu/Kconfig" "$DRIVER_KCONFIG" || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" "$DRIVER_KCONFIG"
 
           # =====================================================================
-          # 🛠️ CORRECTIFS DE COMPATIBILITÉ REQUIS 🛠️
+          # Correctifs spécifiques résiduels à la base Motorola non couverts par le patch
           # =====================================================================
-          # Fix A : Variable de temps Motorola
           sed -i '1s|^|int alarm_debug = 0;\n|' kernel/time/alarmtimer.c
-
-          # Fix B : Type compat_uptr_t manquant
           sed -i '1s|^|typedef unsigned int compat_uptr_t;\n|' include/linux/filter.h
-
-          # Fix C v2 : Injecter les stubs RCU pour satisfaire kernel/rcu/update.c
-          echo -e "static inline void rcu_tasks_bootup_oddness(void) {}\nstatic inline void show_rcu_tasks_gp_kthreads(void) {}" > kernel/rcu/tasks.h
-
-          # Fix G : Ajustement mmap_sem vers mmap_lock pour le firmware EFI de Motorola
           if [ -f "drivers/firmware/efi/efi.c" ]; then
             sed -i 's/mmap_sem/mmap_lock/g' drivers/firmware/efi/efi.c
           fi
@@ -80,7 +77,7 @@ jobs:
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KALLSYMS
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KALLSYMS_ALL
           
-          # Activation forcée du mode Manual Hook (Parfait pour les noyaux 4.19 Non-GKI)
+          # Activation forcée du mode Manual Hook (Idéal Non-GKI)
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --disable CONFIG_KSU_TRACEPOINT_HOOK
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KSU_MANUAL_HOOK
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK
@@ -105,7 +102,7 @@ jobs:
           make O=out $CONFIG_TO_USE
           make O=out olddefconfig
           
-          # Compilation rapide multi-cœur, et REPRISE SUR UN SEUL CŒUR si ça plante
+          # Compilation rapide, avec repli automatique sur un seul cœur pour voir les détails en cas de pépin
           make -j$(nproc --all) O=out KCFLAGS="-w" || make O=out KCFLAGS="-w"
 
       - name: Empaqueter avec AnyKernel3
