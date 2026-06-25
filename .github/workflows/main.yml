@@ -53,13 +53,8 @@ jobs:
           # =====================================================================
           # Correctifs requis résiduels spécifiques au code de base de Motorola
           # =====================================================================
-          # Fix A : Variable de temps Motorola
           sed -i '1s|^|int alarm_debug = 0;\n|' kernel/time/alarmtimer.c
-
-          # Fix B : Type compat_uptr_t manquant
           sed -i '1s|^|typedef unsigned int compat_uptr_t;\n|' include/linux/filter.h
-
-          # Fix G : Ajustement mmap_sem vers mmap_lock pour le firmware EFI de Motorola
           if [ -f "drivers/firmware/efi/efi.c" ]; then
             sed -i 's/mmap_sem/mmap_lock/g' drivers/firmware/efi/efi.c
           fi
@@ -102,8 +97,8 @@ jobs:
           make O=out $CONFIG_TO_USE
           make O=out olddefconfig
           
-          # Compilation propre en parallèle
-          make -j$(nproc --all) O=out KCFLAGS="-w"
+          # Compilation rapide multi-cœur, et REPRISE SUR UN SEUL CŒUR si ça plante
+          make -j$(nproc --all) O=out KCFLAGS="-w" || make O=out KCFLAGS="-w"
 
       - name: Empaqueter avec AnyKernel3
         run: |
