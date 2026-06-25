@@ -99,9 +99,8 @@ jobs:
           fi
 
           # 🛑 STUBS DE SÉCURITÉ ET INSTANCIATION POUR LE LINKER (Fix rules.c)
-          # On injecte en haut de fichier pour écraser proprement l'état global
           if [ -f "drivers/kernelsu/selinux/rules.c" ]; then
-            sed -i '1s|^|struct selinux_state selinux_state; struct selinux_avc; void selinux_status_update_policyload(struct selinux_state *state, int seqno) {} int avc_ss_reset(struct selinux_avc *avc, u32 seqno) { return 0; } void selnl_notify_policyload(u32 seqno) {}\n|' drivers/kernelsu/selinux/rules.c
+            sed -i '1s|^|#include <linux/types.h>\nstruct selinux_state selinux_state; struct selinux_avc; void selinux_status_update_policyload(struct selinux_state *state, int seqno) {} int avc_ss_reset(struct selinux_avc *avc, u32 seqno) { return 0; } void selnl_notify_policyload(u32 seqno) {}\n|' drivers/kernelsu/selinux/rules.c
           fi
           # =====================================================================
 
