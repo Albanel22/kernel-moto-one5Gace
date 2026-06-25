@@ -85,6 +85,13 @@ jobs:
           if [ -f "drivers/firmware/efi/efi.c" ]; then
             sed -i 's/mmap_sem/mmap_lock/g' drivers/firmware/efi/efi.c
           fi
+
+          # 🚨 FIX LSM BLOB : Si i_security n'existe pas, on redirige vers l'infrastructure LSM moderne du noyau
+          if [ -f "security/selinux/include/objsec.h" ]; then
+            sed -i 's/return inode->i_security/return (struct inode_security_struct *)(inode->i_security)/g' security/selinux/include/objsec.h 2>/dev/null || true
+            # Si le noyau utilise la macro de sécurité globale :
+            sed -i 's/inode->i_security/((struct inode_security_struct *)inode->i_security)/g' security/selinux/include/objsec.h 2>/dev/null || true
+          fi
           # =====================================================================
 
           # Détection du defconfig Motorola
@@ -132,12 +139,11 @@ jobs:
           make O=out prepare
           
           # =====================================================================
-          # 🦏 GÉNÉRATION DIRECTE DES FICHIERS FLASK ET AV_PERMISSIONS (Plus d'outils)
+          # 🦏 GÉNÉRATION DIRECTE DES FICHIERS FLASK ET AV_PERMISSIONS
           # =====================================================================
           mkdir -p security/selinux/include
           mkdir -p out/security/selinux/include
           
-          # Écriture brute de flask.h de secours universel pour le build de KernelSU
           cat << 'EOF' > flask.h
           #ifndef _SELINUX_FLASK_H_
           #define _SELINUX_FLASK_H_
@@ -148,7 +154,6 @@ jobs:
           #endif
           EOF
           
-          # Écriture brute de av_permissions.h de secours universel
           cat << 'EOF' > av_permissions.h
           #ifndef _SELINUX_AV_PERMISSIONS_H_
           #define _SELINUX_AV_PERMISSIONS_H_
@@ -158,7 +163,6 @@ jobs:
           #endif
           EOF
           
-          # Copie des fichiers créés aux emplacements attendus par le build global
           cp flask.h av_permissions.h security/selinux/include/
           cp flask.h av_permissions.h out/security/selinux/include/
           # =====================================================================
