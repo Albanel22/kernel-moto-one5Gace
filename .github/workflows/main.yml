@@ -98,13 +98,25 @@ jobs:
             sed -i 's/CMD_SUSFS_HIDE_SUS_MNTS_FOR_ALL_PROCS/CMD_SUSFS_HIDE_SUS_MNTS_FOR_NON_SU_PROCS/g' drivers/kernelsu/supercalls.c
           fi
 
-          # 🛑 STUBS DE SÉCURITÉ ET INSTANCIATION POUR LE LINKER (Fix rules.c & sepolicy.c)
+          # 🛑 STUBS DE SÉCURITÉ, SUSFS ET EXT4 POUR LE LINKER (Dernière ligne droite)
           if [ -f "drivers/kernelsu/selinux/rules.c" ]; then
             sed -i '1s|^|#include <linux/types.h>\nstruct selinux_state selinux_state; struct selinux_avc; void selinux_status_update_policyload(struct selinux_state *state, int seqno) {} int avc_ss_reset(struct selinux_avc *avc, u32 seqno) { return 0; } void selnl_notify_policyload(u32 seqno) {}\n|' drivers/kernelsu/selinux/rules.c
           fi
 
           if [ -f "drivers/kernelsu/selinux/sepolicy.c" ]; then
             sed -i '1s|^|#include <linux/types.h>\nstruct avtab; struct avtab_key; struct avtab_datum; struct avtab_node; struct hashtab; struct ebitmap; struct avtab_node *avtab_search_node(struct avtab *h, struct avtab_key *key) { return NULL; } struct avtab_node *avtab_insert_nonunique(struct avtab *h, struct avtab_key *key, struct avtab_datum *datum) { return NULL; } void *hashtab_search(struct hashtab *h, const void *k) { return NULL; } int hashtab_insert(struct hashtab *h, void *k, void *d) { return 0; } int ebitmap_set_bit(struct ebitmap *e, unsigned long bit, int value) { return 0; }\n|' drivers/kernelsu/selinux/sepolicy.c
+          fi
+
+          if [ -f "drivers/kernelsu/lsm_hooks.c" ]; then
+            sed -i '1s|^|#include <linux/lsm_hooks.h>\nstruct security_hook_heads security_hook_heads; void security_add_hooks(struct security_hook_list *hooks, int count, char *lsm) {}\n|' drivers/kernelsu/lsm_hooks.c
+          fi
+
+          if [ -f "drivers/kernelsu/supercalls.c" ]; then
+            sed -i '1s|^|#include <linux/types.h>\n#include <linux/fs.h>\nvoid susfs_add_try_umount(double target_mnt_ns, char *target_path) {} void susfs_set_i_state_on_external_dir(struct dentry *dentry) {} void susfs_set_hide_sus_mnts_for_all_procs(bool enable) {}\n|' drivers/kernelsu/supercalls.c
+          fi
+
+          if [ -f "drivers/kernelsu/ksud.c" ]; then
+            sed -i '1s|^|void ext4_unregister_sysfs(void) {}\n|' drivers/kernelsu/ksud.c
           fi
           # =====================================================================
 
