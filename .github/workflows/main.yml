@@ -84,7 +84,12 @@ jobs:
             sed -i '170s/^/#/' drivers/kernelsu/Kbuild
           fi
 
-          # Fix K : Ajouter les chemins d'inclusion SELinux au sommet du Kbuild de KernelSU
+          # Fix K : Forcer l'alignement des répertoires pour éliminer l'erreur "flask.h" manquante
+          mkdir -p out/security/selinux/include
+          mkdir -p security/selinux/include
+          touch out/security/selinux/flask.h out/security/selinux/avc_ss.h
+          touch security/selinux/include/flask.h security/selinux/include/avc_ss.h
+          
           if [ -f "drivers/kernelsu/Kbuild" ]; then
             sed -i '1s|^|ccflags-y += -I\$(srctree)/security/selinux -I\$(objtree)/security/selinux -I\$(srctree)/security/selinux/include -I\$(objtree)/security/selinux/include\n|' drivers/kernelsu/Kbuild
           fi
@@ -123,8 +128,8 @@ jobs:
           make O=out $CONFIG_TO_USE
           make O=out olddefconfig
           
-          # 🚀 ÉTAPE CRUCIALE : Pré-générer les en-têtes SELinux avant la parallélisation
-          make O=out -j$(nproc --all) security/
+          # Génération forcée des fichiers réels de SELinux avant d'attaquer la compilation globale
+          make O=out security/selinux/
           
           # Compilation générale
           make -j$(nproc --all) O=out KCFLAGS="-w"
