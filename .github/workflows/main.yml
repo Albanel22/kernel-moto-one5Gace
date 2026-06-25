@@ -100,8 +100,7 @@ jobs:
 
           # 🛑 STUBS DE SÉCURITÉ ET INSTANCIATION POUR LE LINKER (Fix rules.c)
           if [ -f "drivers/kernelsu/selinux/rules.c" ]; then
-            printf "\nstruct selinux_state { int disabled; int enforcing; } ksu_selinux_state;\n" >> drivers/kernelsu/selinux/rules.c
-            printf "struct selinux_state *selinux_state = &ksu_selinux_state;\n" >> drivers/kernelsu/selinux/rules.c
+            printf "\nstruct selinux_state selinux_state;\n" >> drivers/kernelsu/selinux/rules.c
             printf "struct selinux_avc;\n" >> drivers/kernelsu/selinux/rules.c
             printf "void selinux_status_update_policyload(struct selinux_state *state, int seqno) {}\n" >> drivers/kernelsu/selinux/rules.c
             printf "int avc_ss_reset(struct selinux_avc *avc, u32 seqno) { return 0; }\n" >> drivers/kernelsu/selinux/rules.c
