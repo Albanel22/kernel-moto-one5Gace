@@ -40,7 +40,7 @@ jobs:
           curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s main
 
           # =====================================================================
-          # 🛠️ CORRECTIFS DE COMPATIBILITÉ (MÉTHODE ULTRA-ROBUSTE) 🛠️
+          # 🛠️ CORRECTIFS DE COMPATIBILITÉ (MÉTHODE PAR INTERCEPTION) 🛠️
           # =====================================================================
 
           # Fix A : Initialiser la variable de temps Motorola manquante
@@ -49,7 +49,10 @@ jobs:
           # Fix B : Déclarer directement le type compat_uptr_t manquant au sommet de filter.h
           sed -i '1s|^|typedef unsigned int compat_uptr_t;\n|' include/linux/filter.h
 
-          # Fix C : Neutraliser le forçage des sous-systèmes RCU conflictuels dans le Kconfig de KernelSU
+          # Fix C : Neutraliser complètement l'en-tête rcu/tasks.h obsolète pour briser la boucle d'erreur
+          echo "// Neutralisé pour la compatibilité ReSukiSU" > kernel/rcu/tasks.h
+
+          # Fix D : Nettoyer la configuration forcée de KernelSU si elle s'exécute en amont
           if [ -f "KernelSU/Kconfig" ]; then
             sed -i 's/select TASKS_RCU//g' KernelSU/Kconfig
             sed -i 's/select TASKS_TRACE_RCU//g' KernelSU/Kconfig
@@ -63,7 +66,7 @@ jobs:
             CONFIG_TO_USE="vendor/kiev-perf_defconfig"
           fi
           
-          # Activation stricte de l'essentiel sans casser le moteur RCU de Motorola
+          # Injection directe des drapeaux de désactivation au sein du defconfig cible
           echo "CONFIG_KSU=y" >> arch/arm64/configs/$CONFIG_TO_USE
           echo "CONFIG_TASKS_RCU=n" >> arch/arm64/configs/$CONFIG_TO_USE
           echo "CONFIG_TASKS_TRACE_RCU=n" >> arch/arm64/configs/$CONFIG_TO_USE
