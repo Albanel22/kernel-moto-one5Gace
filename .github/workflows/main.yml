@@ -79,9 +79,9 @@ jobs:
             echo -e "all:\n\t@echo 'Vérification ReSukiSU contournée avec succès'\n" > KernelSU/kernel/tools/static_export_check.mk
           fi
 
-          # Fix J : Forcer le contournement de la vérification Non-GKI dans le Kbuild de ReSukiSU
+          # Fix J : Forcer le contournement de la vérification Non-GKI (Ligne 170 du Kbuild)
           if [ -f "drivers/kernelsu/Kbuild" ]; then
-            sed -i 's/\$(error TP hooks are incompatible with Non-GKI\/GKI 1.0 kernels..)/# TP Hooks ignorés pour Non-GKI/g' drivers/kernelsu/Kbuild
+            sed -i '170s/^/#/' drivers/kernelsu/Kbuild
           fi
 
           # =====================================================================
