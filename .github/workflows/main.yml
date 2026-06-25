@@ -87,7 +87,6 @@ jobs:
           fi
 
           # ✂️ RECONSTRUCTION CHIRURGICALE DES FONCTIONS DE SÉCURITÉ DANS OBJSEC.H
-          # On vide le corps des fonctions problématiques pour éviter les erreurs de structure inexistante
           if [ -f "security/selinux/include/objsec.h" ]; then
             sed -i '/static inline struct task_security_struct \*selinux_cred/,/^}/c\static inline struct task_security_struct *selinux_cred(const struct cred *cred) { return NULL; }' security/selinux/include/objsec.h
             sed -i '/static inline struct file_security_struct \*selinux_file/,/^}/c\static inline struct file_security_struct *selinux_file(const struct file *file) { return NULL; }' security/selinux/include/objsec.h
@@ -140,7 +139,7 @@ jobs:
           make O=out prepare
           
           # =====================================================================
-          # 🦏 RE-GÉNÉRATION COMPLÈTE ET COMPATIBLE DES HEADERS FLASK
+          # 🦏 EN-TÊTES COMPATIBLES AVEC LA CONFIGURATION HASH DE SIDTAB.H
           # =====================================================================
           mkdir -p security/selinux/include
           mkdir -p out/security/selinux/include
@@ -153,6 +152,9 @@ jobs:
           #define SECLASS_SYSTEM                                   3
           #define SECLASS_CAPABILITY                               4
           #define SECINITSID_NUM 27
+          
+          /* Correction pour sidtab.h */
+          #define CONFIG_SECURITY_SELINUX_SIDTAB_HASH_BITS 9
           #endif
           EOF
           
