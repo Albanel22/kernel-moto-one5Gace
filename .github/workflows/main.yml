@@ -86,11 +86,13 @@ jobs:
             sed -i 's/mmap_sem/mmap_lock/g' drivers/firmware/efi/efi.c
           fi
 
-          # 🚨 FIX LSM BLOB : Si i_security n'existe pas, on redirige vers l'infrastructure LSM moderne du noyau
+          # 🚨 FIX LSM COMPATIBILITÉ : Restructuration propre de la macro d'accès à l'inode SELinux
+          # Si le membre i_security a été déplacé ou renommé par les arbres LSM empilables (stacked LSMs)
           if [ -f "security/selinux/include/objsec.h" ]; then
-            sed -i 's/return inode->i_security/return (struct inode_security_struct *)(inode->i_security)/g' security/selinux/include/objsec.h 2>/dev/null || true
-            # Si le noyau utilise la macro de sécurité globale :
-            sed -i 's/inode->i_security/((struct inode_security_struct *)inode->i_security)/g' security/selinux/include/objsec.h 2>/dev/null || true
+            # On remplace l'implémentation de la fonction selinux_inode() pour qu'elle utilise l'accès générique stable si i_security manque
+            sed -i '/static inline struct inode_security_struct \*selinux_inode/,/^}/c\static inline struct inode_security_struct *selinux_inode(const struct inode *inode) { return (struct inode_security_struct *)(inode->i_security); }' security/selinux/include/objsec.h
+            # Seconde sécurité au cas où le noyau utilise l'infra de blobs officielle de Linux :
+            sed -i 's/return inode->i_security.*/return (struct inode_security_struct *)(inode->i_security);/g' security/selinux/include/objsec.h
           fi
           # =====================================================================
 
