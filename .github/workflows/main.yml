@@ -99,9 +99,9 @@ jobs:
           fi
 
           # 🛑 STUB DE SÉCURITÉ POUR LE LINKER (Fix rules.c)
-          # On injecte une version vide de la fonction manquante à la fin de rules.c pour clore l'édition de liens
+          # Signature exacte avec l'argument int corrigé
           if [ -f "drivers/kernelsu/selinux/rules.c" ]; then
-            printf "\nvoid selinux_status_update_policyload(struct selinux_state *state) {}\n" >> drivers/kernelsu/selinux/rules.c
+            printf "\nvoid selinux_status_update_policyload(struct selinux_state *state, int seqno) {}\n" >> drivers/kernelsu/selinux/rules.c
           fi
           # =====================================================================
 
@@ -169,7 +169,6 @@ jobs:
           #define SECINITSID_NUM 27
           #define CONFIG_SECURITY_SELINUX_SIDTAB_HASH_BITS 9
           
-          /* Déclaration anticipée de la structure pour éviter les warnings */
           struct selinux_state;
           #endif
           EOF
