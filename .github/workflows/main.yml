@@ -69,9 +69,9 @@ jobs:
             sed -i 's/mmap_sem/mmap_lock/g' drivers/firmware/efi/efi.c
           fi
 
-          # Fix H : Exporter explicitement le symbole de sécurité exigé par le script de vérification de ReSukiSU
+          # Fix H : Injecter l'exportation de symbole juste après la déclaration de la structure cible
           if [ -f "security/selinux/selinuxfs.c" ]; then
-            echo 'extern const struct file_operations sel_handle_status_ops; EXPORT_SYMBOL_GPL(sel_handle_status_ops);' >> security/selinux/selinuxfs.c
+            sed -i '/sel_handle_status_ops =/a EXPORT_SYMBOL_GPL(sel_handle_status_ops);' security/selinux/selinuxfs.c
           fi
 
           # =====================================================================
@@ -82,12 +82,13 @@ jobs:
             CONFIG_TO_USE="vendor/kiev-perf_defconfig"
           fi
           
-          # Injection directe des drapeaux et exigences Kallsyms/ReSukiSU
-          echo "CONFIG_KSU=y" >> arch/arm64/configs/$CONFIG_TO_USE
-          echo "CONFIG_TASKS_RCU=n" >> arch/arm64/configs/$CONFIG_TO_USE
-          echo "CONFIG_TASKS_TRACE_RCU=n" >> arch/arm64/configs/$CONFIG_TO_USE
-          echo "CONFIG_KALLSYMS=y" >> arch/arm64/configs/$CONFIG_TO_USE
-          echo "CONFIG_KALLSYMS_ALL=y" >> arch/arm64/configs/$CONFIG_TO_USE
+          # Forçage propre des options de configuration via l'outil système du noyau
+          chmod +x scripts/config
+          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KSU
+          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --disable CONFIG_TASKS_RCU
+          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --disable CONFIG_TASKS_TRACE_RCU
+          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KALLSYMS
+          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KALLSYMS_ALL
 
       - name: Compiler le Kernel (sm8250 / 4.19)
         run: |
@@ -118,7 +119,7 @@ jobs:
           zip -r ../ReSukiSU-Kernel-Kiev.zip *
 
       - name: Téléverser le ZIP final sur GitHub
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact=v4
         with:
           name: ReSukiSU-Kernel-Kiev-AnyKernel3
           path: ReSukiSU-Kernel-Kiev.zip
