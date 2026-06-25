@@ -87,8 +87,6 @@ jobs:
           # Fix K : Pré-générer les en-têtes SELinux fictifs mais valides pour satisfaire sidtab.h
           mkdir -p out/security/selinux/include
           mkdir -p security/selinux/include
-          
-          # On remplit flask.h avec les définitions minimales exigées
           echo -e "#ifndef _SELINUX_FLASK_H_\n#define _SELINUX_FLASK_H_\n#define SECINITSID_NUM 27\n#endif" > out/security/selinux/flask.h
           cp out/security/selinux/flask.h security/selinux/include/flask.h
           touch out/security/selinux/avc_ss.h security/selinux/include/avc_ss.h
@@ -105,15 +103,13 @@ jobs:
             CONFIG_TO_USE="vendor/kiev-perf_defconfig"
           fi
           
-          # Forçage propre des options de configuration via l'outil système du noyau
+          # Forçage propre des options de configuration de base via l'outil système du noyau
           chmod +x scripts/config
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KSU
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --disable CONFIG_TASKS_RCU
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --disable CONFIG_TASKS_TRACE_RCU
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KALLSYMS
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KALLSYMS_ALL
-          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SECURITY_SELINUX
-          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --set-val CONFIG_SECURITY_SELINUX_SIDTAB_HASH_BITS 9
 
       - name: Compiler le Kernel (sm8250 / 4.19)
         run: |
@@ -136,8 +132,8 @@ jobs:
           # Forcer la regénération propre des fichiers SELinux avant d'attaquer la compilation globale
           make O=out security/selinux/
           
-          # Compilation générale
-          make -j$(nproc --all) O=out KCFLAGS="-w"
+          # Compilation générale (avec injection de la constante de hachage manquante)
+          make -j$(nproc --all) O=out KCFLAGS="-w -DCONFIG_SECURITY_SELINUX_SIDTAB_HASH_BITS=9"
 
       - name: Empaqueter avec AnyKernel3
         run: |
