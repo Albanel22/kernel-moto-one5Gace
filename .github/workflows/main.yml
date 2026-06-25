@@ -69,9 +69,9 @@ jobs:
             sed -i 's/mmap_sem/mmap_lock/g' drivers/firmware/efi/efi.c
           fi
 
-          # Fix H : Injecter l'exportation de symbole juste après la déclaration de la structure cible
+          # Fix H : Forcer l'exportation du symbole requis tout en bas de selinuxfs.c de façon brute
           if [ -f "security/selinux/selinuxfs.c" ]; then
-            sed -i '/sel_handle_status_ops =/a EXPORT_SYMBOL_GPL(sel_handle_status_ops);' security/selinux/selinuxfs.c
+            echo -e "\n#include <linux/export.h>\nextern const struct file_operations sel_handle_status_ops;\nEXPORT_SYMBOL_GPL(sel_handle_status_ops);" >> security/selinux/selinuxfs.c
           fi
 
           # =====================================================================
