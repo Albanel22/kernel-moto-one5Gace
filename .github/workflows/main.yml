@@ -92,6 +92,11 @@ jobs:
             sed -i '/static inline struct file_security_struct \*selinux_file/,/^}/c\static inline struct file_security_struct *selinux_file(const struct file *file) { return NULL; }' security/selinux/include/objsec.h
             sed -i '/static inline struct inode_security_struct \*selinux_inode/,/^}/c\static inline struct inode_security_struct *selinux_inode(const struct inode *inode) { return NULL; }' security/selinux/include/objsec.h
           fi
+
+          # 🔄 FIX MACRO SUSFS DANS SUPERCALLS.C
+          if [ -f "drivers/kernelsu/supercalls.c" ]; then
+            sed -i 's/CMD_SUSFS_HIDE_SUS_MNTS_FOR_ALL_PROCS/CMD_SUSFS_HIDE_SUS_MNTS_FOR_NON_SU_PROCS/g' drivers/kernelsu/supercalls.c
+          fi
           # =====================================================================
 
           # Détection du defconfig Motorola
@@ -106,7 +111,7 @@ jobs:
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KALLSYMS
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KALLSYMS_ALL
           
-          # 🔐 FORCE SECCOMP TO FIX APP_PROFILE.C
+          # Force seccomp
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SECCOMP
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SECCOMP_FILTER
           
