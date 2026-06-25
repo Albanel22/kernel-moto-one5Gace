@@ -65,9 +65,9 @@ jobs:
           grep -q "kernelsu" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "$DRIVER_MAKEFILE"
           grep -q "drivers/kernelsu/Kconfig" "$DRIVER_KCONFIG" || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" "$DRIVER_KCONFIG"
 
-          # Fix SELinux : On donne tous les chemins possibles à KernelSU
+          # Fix SELinux : On donne l'ordre d'inclusion correct sans forcer d'écrasement de structure
           if [ -f "drivers/kernelsu/Makefile" ]; then
-            sed -i '1s|^|ccflags-y += -I$(srctree)/security/selinux -I$(srctree)/security/selinux/include -I$(objtree)/security/selinux/include -I$(objtree)/security/selinux\n|' drivers/kernelsu/Makefile
+            sed -i '1s|^|ccflags-y += -I$(srctree)/security/selinux -I$(srctree)/security/selinux/include -I$(objtree)/security/selinux -I$(objtree)/security/selinux/include\n|' drivers/kernelsu/Makefile
           fi
 
           # =====================================================================
@@ -76,23 +76,14 @@ jobs:
           sed -i '1s|^|int alarm_debug = 0;\n|' kernel/time/alarmtimer.c
           sed -i '1s|^|typedef unsigned int compat_uptr_t;\n|' include/linux/filter.h
           
-          # Fix E : Définir la constante demandée par SUSFS dans le scheduler de Motorola
+          # Fix E : Scheduler de Motorola
           sed -i '1s|^|#define NOHZ_KICK_MASK 0x1\n|' kernel/sched/core.c
           
-          # Fix F : Rediriger bpf_stats_handler vers le gestionnaire d'entiers standard
+          # Fix F : Gestionnaire d'entiers standard
           sed -i '1s|^|#define bpf_stats_handler proc_dointvec\n|' kernel/sysctl.c
           
           if [ -f "drivers/firmware/efi/efi.c" ]; then
             sed -i 's/mmap_sem/mmap_lock/g' drivers/firmware/efi/efi.c
-          fi
-
-          # 🚨 FIX LSM COMPATIBILITÉ : Restructuration propre de la macro d'accès à l'inode SELinux
-          # Si le membre i_security a été déplacé ou renommé par les arbres LSM empilables (stacked LSMs)
-          if [ -f "security/selinux/include/objsec.h" ]; then
-            # On remplace l'implémentation de la fonction selinux_inode() pour qu'elle utilise l'accès générique stable si i_security manque
-            sed -i '/static inline struct inode_security_struct \*selinux_inode/,/^}/c\static inline struct inode_security_struct *selinux_inode(const struct inode *inode) { return (struct inode_security_struct *)(inode->i_security); }' security/selinux/include/objsec.h
-            # Seconde sécurité au cas où le noyau utilise l'infra de blobs officielle de Linux :
-            sed -i 's/return inode->i_security.*/return (struct inode_security_struct *)(inode->i_security);/g' security/selinux/include/objsec.h
           fi
           # =====================================================================
 
@@ -141,11 +132,12 @@ jobs:
           make O=out prepare
           
           # =====================================================================
-          # 🦏 GÉNÉRATION DIRECTE DES FICHIERS FLASK ET AV_PERMISSIONS
+          # 🦏 RE-GÉNÉRATION COMPLÈTE ET COMPATIBLE DES HEADERS FLASK
           # =====================================================================
           mkdir -p security/selinux/include
           mkdir -p out/security/selinux/include
           
+          # Flask.h enrichi avec les SID initiaux requis par sidtab.h
           cat << 'EOF' > flask.h
           #ifndef _SELINUX_FLASK_H_
           #define _SELINUX_FLASK_H_
@@ -153,9 +145,13 @@ jobs:
           #define SECLASS_PROCESS                                  2
           #define SECLASS_SYSTEM                                   3
           #define SECLASS_CAPABILITY                               4
+          
+          /* Initial SIDs definition to fix sidtab.h */
+          #define SECINITSID_NUM 27
           #endif
           EOF
           
+          # Av_permissions.h de secours
           cat << 'EOF' > av_permissions.h
           #ifndef _SELINUX_AV_PERMISSIONS_H_
           #define _SELINUX_AV_PERMISSIONS_H_
