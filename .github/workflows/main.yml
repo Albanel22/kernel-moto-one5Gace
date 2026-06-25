@@ -99,10 +99,10 @@ jobs:
           fi
 
           # 🛑 STUBS DE SÉCURITÉ POUR LE LINKER (Fix rules.c)
-          # On ajoute les déclarations vides requises par l'édition de liens globale
           if [ -f "drivers/kernelsu/selinux/rules.c" ]; then
-            printf "\nvoid selinux_status_update_policyload(struct selinux_state *state, int seqno) {}\n" >> drivers/kernelsu/selinux/rules.c
-            printf "void avc_ss_reset(u32 seqno) {}\n" >> drivers/kernelsu/selinux/rules.c
+            printf "\nstruct selinux_state;\nstruct selinux_avc;\n" >> drivers/kernelsu/selinux/rules.c
+            printf "void selinux_status_update_policyload(struct selinux_state *state, int seqno) {}\n" >> drivers/kernelsu/selinux/rules.c
+            printf "int avc_ss_reset(struct selinux_avc *avc, u32 seqno) { return 0; }\n" >> drivers/kernelsu/selinux/rules.c
             printf "void selnl_notify_policyload(u32 seqno) {}\n" >> drivers/kernelsu/selinux/rules.c
           fi
           # =====================================================================
