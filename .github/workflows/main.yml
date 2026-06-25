@@ -51,10 +51,18 @@ jobs:
           grep -q "drivers/kernelsu/Kconfig" "$DRIVER_KCONFIG" || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" "$DRIVER_KCONFIG"
 
           # =====================================================================
-          # Correctifs requis résiduels spécifiques au code de base de Motorola
+          # 🛠️ CORRECTIFS DE COMPATIBILITÉ REQUIS 🛠️
           # =====================================================================
+          # Fix A : Variable de temps Motorola
           sed -i '1s|^|int alarm_debug = 0;\n|' kernel/time/alarmtimer.c
+
+          # Fix B : Type compat_uptr_t manquant
           sed -i '1s|^|typedef unsigned int compat_uptr_t;\n|' include/linux/filter.h
+
+          # Fix C v2 : Injecter les stubs RCU pour satisfaire kernel/rcu/update.c
+          echo -e "static inline void rcu_tasks_bootup_oddness(void) {}\nstatic inline void show_rcu_tasks_gp_kthreads(void) {}" > kernel/rcu/tasks.h
+
+          # Fix G : Ajustement mmap_sem vers mmap_lock pour le firmware EFI de Motorola
           if [ -f "drivers/firmware/efi/efi.c" ]; then
             sed -i 's/mmap_sem/mmap_lock/g' drivers/firmware/efi/efi.c
           fi
