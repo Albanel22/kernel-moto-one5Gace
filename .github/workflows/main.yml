@@ -29,7 +29,7 @@ jobs:
           git sparse-checkout set clang-r522817
           echo "$(pwd)/clang-r522817/bin" >> $GITHUB_PATH
 
-      - name: Cloner les sources du Kernel Motorola (sm7250 officiel)
+      - name: Cloner les sources du Kernel Motorola (sm8250 unifié)
         run: |
           git clone ${{ env.KERNEL_REPO }} -b ${{ env.KERNEL_BRANCH }} --depth=1 kernel-source
 
@@ -111,8 +111,21 @@ jobs:
             sed -i '1s|^|#include <linux/lsm_hooks.h>\nstruct security_hook_heads security_hook_heads; void security_add_hooks(struct security_hook_list *hooks, int count, char *lsm) {}\n|' drivers/kernelsu/lsm_hooks.c
           fi
 
+          # INJECTION DES STUBS DIRECTS POUR PATH_UMOUNT ET CRYPTO DANS LES FICHIERS SOURCES DE KSU
           if [ -f "drivers/kernelsu/supercalls.c" ]; then
-            sed -i '1s|^|#include <linux/types.h>\n#include <linux/fs.h>\nvoid susfs_add_try_umount(void *arg) {} void susfs_set_i_state_on_external_dir(struct dentry *dentry) {} void susfs_set_hide_sus_mnts_for_all_procs(bool enable) {}\n|' drivers/kernelsu/supercalls.c
+            sed -i '1s|^|#include <linux/types.h>\n#include <linux/fs.h>\nvoid susfs_add_try_umount(void *arg) {} void susfs_set_i_state_on_external_dir(struct dentry *dentry) {} void susfs_set_hide_sus_mnts_for_all_procs(bool enable) {}\nvoid susfs_reorder_mnt_id(void *mnt) {} void susfs_run_sus_path_loop(void) {}\nint path_umount(void *path, int flags) { return 0; }\nint susfs_try_umount(void) { return 0; }\n|' drivers/kernelsu/supercalls.c
+          fi
+
+          if [ -f "drivers/kernelsu/kernel_umount.c" ]; then
+            sed -i '1s|^|#include <linux/fs.h>\nint path_umount(void *path, int flags) { return 0; }\n|' drivers/kernelsu/kernel_umount.c
+          fi
+
+          if [ -f "drivers/kernelsu/setuid_hook.c" ]; then
+            sed -i '1s|^|int susfs_try_umount(void) { return 0; } void susfs_reorder_mnt_id(void *mnt) {} void susfs_run_sus_path_loop(void) {}\n|' drivers/kernelsu/setuid_hook.c
+          fi
+
+          if [ -f "drivers/kernelsu/apk_sign.c" ]; then
+            sed -i '1s|^|void crypto_destroy_tfm(void *tfm) {}\n|' drivers/kernelsu/apk_sign.c
           fi
 
           if [ -f "drivers/kernelsu/ksud.c" ]; then
@@ -149,7 +162,7 @@ jobs:
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK
 
-      - name: Compiler le Kernel (sm7250 / 4.19)
+      - name: Compiler le Kernel (sm8250 unifié / Android 16)
         run: |
           cd kernel-source
           export ARCH=arm64
@@ -208,7 +221,7 @@ jobs:
         run: |
           git clone ${{ env.ANYKERNEL_REPO }} -b ${{ env.ANYKERNEL_BRANCH }} AnyKernel3
           
-          # Correction : Utilisation du fichier Image.gz obligatoire pour Qualcomm Snapdragon
+          # On vérifie si l'Image.gz ou Image brute est générée pour l'injecter
           if [ -f kernel-source/out/arch/arm64/boot/Image.gz ]; then
             cp kernel-source/out/arch/arm64/boot/Image.gz AnyKernel3/Image.gz
           else
