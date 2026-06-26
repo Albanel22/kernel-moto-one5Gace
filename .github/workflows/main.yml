@@ -119,12 +119,11 @@ jobs:
           sed -i '1s|^|#include <linux/jump_label.h>\nextern struct static_key_true ksu_is_init_rc_hook_enabled;\n|' fs/stat.c
           sed -i '1s|^|#include <linux/jump_label.h>\nDEFINE_STATIC_KEY_TRUE(ksu_is_input_hook_enabled);\nint ksu_handle_vfs_fstat(int fd, void *stat) { return 0; }\n|' drivers/input/input.c
 
-          # 🔐 DECLARATION EXTERNE STRICTE POUR PATH_UMOUNT
+          # 🔐 MAPPING ET REDIRECTION DE PATH_UMOUNT VERS THE NATIVE DO_UMOUNT REQUIS PAR MOTOROLA 4.19
           if [ -f "drivers/kernelsu/kernel_umount.c" ]; then
-            sed -i '1s|^|#include <linux/path.h>\nextern int path_umount(struct path *path, int flags);\n|' drivers/kernelsu/kernel_umount.c
+            sed -i '1s|^|#include <linux/path.h>\n#include <linux/fs.h>\nextern int do_umount(struct vfsmount *mnt, int flags);\n#define path_umount(path, flags) do_umount((path)->mnt, flags)\n|' drivers/kernelsu/kernel_umount.c
           fi
 
-          # 🛠️ CORRECTION DU STUB SUSFS_SET_I_STATE (Reçoit un void* générique pour éviter le crash de type)
           if [ -f "drivers/kernelsu/supercalls.c" ]; then
             sed -i '1s|^|#include <linux/types.h>\n#include <linux/fs.h>\n#include <linux/path.h>\nvoid susfs_add_try_umount(void *arg) {} void susfs_set_i_state_on_external_dir(void *arg) {} void susfs_set_hide_sus_mnts_for_all_procs(bool enable) {}\n|' drivers/kernelsu/supercalls.c
           fi
@@ -233,7 +232,7 @@ jobs:
           cp flask.h av_permissions.h out/security/selinux/include/
           # =====================================================================
           
-          # COMPILATION GLOBALE DIRECTE (Ajout du flag -w local pour outrepasser les pr_info du fichier local)
+          # COMPILATION GLOBALE DIRECTE
           make -j$(nproc --all) O=out KCFLAGS="-w"
 
       - name: Empaqueter avec AnyKernel3
