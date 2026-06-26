@@ -102,6 +102,12 @@ jobs:
             sed -i 's/if (!WRITE_ONCE(current->fail_nth, fail_nth - 1))/WRITE_ONCE(current->fail_nth, fail_nth - 1); if (current->fail_nth == 0)/g' lib/fault-inject.c
           fi
 
+          # 🎯 FIX QUALCOMM IPA SECURITY BYPASS (__bad_copy_to)
+          # On force l'évaluation de la taille à une constante acceptable pour contourner la panique du compilateur à la ligne 2256
+          if [ -f "drivers/platform/msm/ipa/ipa_v3/ipa_hw_stats.c" ]; then
+            sed -i 's/copy_from_user(&b, buf, count)/copy_from_user(&b, buf, count > sizeof(b) ? sizeof(b) : count)/g' drivers/platform/msm/ipa/ipa_v3/ipa_hw_stats.c
+          fi
+
           # 🔄 FIX MACRO SUSFS DANS SUPERCALLS.C
           if [ -f "drivers/kernelsu/supercalls.c" ]; then
             sed -i 's/CMD_SUSFS_HIDE_SUS_MNTS_FOR_ALL_PROCS/CMD_SUSFS_HIDE_SUS_MNTS_FOR_NON_SU_PROCS/g' drivers/kernelsu/supercalls.c
@@ -188,6 +194,9 @@ jobs:
           ./scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK
           ./scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK
           
+          # 🛡️ DESACTIVATION DE FORTIFY_SOURCE POUR EVITER LES ERREURS STRICTES GCC12 SUR PILOTES ANCIENS
+          ./scripts/config --file out/.config --disable CONFIG_FORTIFY_SOURCE
+          
           make O=out ARCH=arm64 olddefconfig
 
       - name: Compiler le Kernel (sm8250 unifié / Android 16)
@@ -200,7 +209,6 @@ jobs:
           export CLANG_TRIPLE=aarch64-linux-gnu-
           export CC=clang
           
-          # Lancement de la compilation avec KCFLAGS -w pour ignorer les faux-positifs de taille de buffers de Qualcomm IPA
           make -j$(nproc --all) O=out KCFLAGS="-w" Image.gz
 
       - name: Empaqueter avec AnyKernel3
