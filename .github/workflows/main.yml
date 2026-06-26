@@ -11,7 +11,7 @@ jobs:
       - name: Configuration de l'environnement de build
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential libncurses5-dev libssl-dev libelf-dev flex bison git gnupg i2c-tools libsensors4-dev lm-sensors unzip zip textinfo libtext-gmo-perl libio-string-perl libxml-simple-perl ccache
+          sudo apt-get install -y bc build-essential libncurses5-dev libssl-dev libelf-dev flex bison git gnupg i2c-tools libsensors-dev lm-sensors unzip zip texinfo libio-string-perl libxml-simple-perl ccache
 
       - name: Clonage du code source du Kernel (Motorola)
         run: |
