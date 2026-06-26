@@ -86,8 +86,8 @@ jobs:
             sed -i 's/mmap_sem/mmap_lock/g' drivers/firmware/efi/efi.c
           fi
 
-          # Stub de temps rtc_time64_to_tm manquant dans la config Motorola
-          sed -i '1s|^|struct rtc_time; void rtc_time64_to_tm(unsigned long long time, struct rtc_time *tm) {}\n|' kernel/power/suspend.c
+          # Stub de temps rtc_time64_to_tm corrigé avec le type strict conforme à linux/rtc.h
+          sed -i '1s|^|#include <linux/time.h>\nstruct rtc_time;\nvoid rtc_time64_to_tm(time64_t time, struct rtc_time *tm) {}\n|' kernel/power/suspend.c
 
           # ✂️ RECONSTRUCTION CHIRURGICALE DES FONCTIONS DE SÉCURITÉ DANS OBJSEC.H
           if [ -f "security/selinux/include/objsec.h" ]; then
