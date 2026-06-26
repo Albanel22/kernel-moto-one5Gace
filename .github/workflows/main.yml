@@ -152,8 +152,14 @@ jobs:
           # Appliquer les options par défaut d'usine complètes
           make O=out ARCH=arm64 olddefconfig
           
-          # Injection des paramètres KernelSU-Next & SUSFS
+          # 🛑 DESACTIVATION STRICTE DE LOCKDEP (Pour résoudre l'erreur de compilation)
           chmod +x scripts/config
+          ./scripts/config --file out/.config --disable CONFIG_LOCKDEP
+          ./scripts/config --file out/.config --disable CONFIG_LOCK_STAT
+          ./scripts/config --file out/.config --disable CONFIG_DEBUG_LOCK_ALLOC
+          ./scripts/config --file out/.config --disable CONFIG_PROVE_LOCKING
+          
+          # Injection des paramètres KernelSU-Next & SUSFS
           ./scripts/config --file out/.config --enable CONFIG_KSU
           ./scripts/config --file out/.config --enable CONFIG_KALLSYMS
           ./scripts/config --file out/.config --enable CONFIG_KALLSYMS_ALL
@@ -188,8 +194,6 @@ jobs:
           export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
           export CLANG_TRIPLE=aarch64-linux-gnu-
           export CC=clang
-          
-          # Nettoyage complet : On n'injecte plus aucun en-tête SELinux artificiel ou brisé !
           
           # Lancement de la compilation lourde
           make -j$(nproc --all) O=out KCFLAGS="-w" Image.gz
