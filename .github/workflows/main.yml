@@ -110,9 +110,9 @@ jobs:
           sed -i '1s|^|#include <linux/types.h>\n#include <linux/jump_label.h>\nvoid ksu_handle_vfs_fstat(int fd, loff_t *kstat_size_ptr) {}\n|' fs/stat.c
           sed -i '1s|^|#include <linux/jump_label.h>\nstruct static_key_true ksu_is_input_hook_enabled = STATIC_KEY_TRUE_INIT;\n|' drivers/input/input.c
 
-          # 🧠 COMPLETE STUBS RCU TASKS CORRIGÉS
+          # 🧠 COMPLETE STUBS RCU TASKS CORRIGÉS (Signatures sans arguments conformes à linux/rcupdate.h)
           if [ -f "kernel/rcu/update.c" ]; then
-            echo -e '#include <linux/lockdep.h>\n#include <linux/sched.h>\nstruct lockdep_map rcu_trace_lock_map;\nvoid rcu_read_unlock_trace_special(struct task_struct *t) {}\nvoid exit_tasks_rcu_start(struct task_struct *t) {}\nvoid exit_tasks_rcu_finish(struct task_struct *t) {}\nvoid synchronize_rcu_tasks(void) {}\nvoid call_rcu_tasks(struct rcu_head *rhp, rcu_callback_t func) {}\nvoid call_rcu_tasks_trace(struct rcu_head *rhp, rcu_callback_t func) {}' >> kernel/rcu/update.c
+            echo -e '#include <linux/lockdep.h>\n#include <linux/sched.h>\nstruct lockdep_map rcu_trace_lock_map;\nvoid rcu_read_unlock_trace_special(struct task_struct *t) {}\nvoid exit_tasks_rcu_start(void) {}\nvoid exit_tasks_rcu_finish(void) {}\nvoid synchronize_rcu_tasks(void) {}\nvoid call_rcu_tasks(struct rcu_head *rhp, rcu_callback_t func) {}\nvoid call_rcu_tasks_trace(struct rcu_head *rhp, rcu_callback_t func) {}' >> kernel/rcu/update.c
           fi
 
           # 🛑 STUBS ATTACHÉS AUX SUPERCALLS INTERNES SUSFS MANQUANTS
@@ -181,7 +181,6 @@ jobs:
           export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
           export CLANG_TRIPLE=aarch64-linux-gnu-
           export CC=clang
-          # On remet le parallélisme complet pour accélérer le build !
           make -j$(nproc --all) O=out KCFLAGS="-w -Wno-error" Image.gz
 
       - name: Empaqueter avec AnyKernel3
