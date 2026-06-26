@@ -72,7 +72,7 @@ jobs:
           # =====================================================================
           # Correctifs spécifiques résiduels à la base Motorola + SUSFS
           # =====================================================================
-          sed -i '1s|^|int alarm_debug = 0;\n|' kernel/time/alarmtimer.c
+          # REMARQUE : alarm_debug a été retiré d'ici car déjà présent d'origine !
           sed -i '1s|^|typedef unsigned int compat_uptr_t;\n|' include/linux/filter.h
           
           # Fix E : Configuration du scheduler et stub nohz_flags demandé par le Linker
@@ -141,7 +141,6 @@ jobs:
           export SUBARCH=arm64
           mkdir -p out
           
-          # Recherche automatique des defconfigs réels
           BASE_CONFIG=$(find arch/arm64/configs/ -name "lito-perf_defconfig" -o -name "lito_defconfig" | head -n 1)
           MOTO_CONFIG=$(find arch/arm64/configs/ -name "*kiev*" | head -n 1)
           
@@ -154,7 +153,6 @@ jobs:
             ARCH=arm64 ./scripts/kconfig/merge_config.sh -O out/ "$MOTO_CONFIG"
           fi
           
-          # Appliquer les options par défaut d'usine complètes
           make O=out ARCH=arm64 olddefconfig
           
           # Injection des paramètres KernelSU-Next & SUSFS
@@ -181,7 +179,6 @@ jobs:
           ./scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK
           ./scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK
           
-          # Consolidation finale du fichier
           make O=out ARCH=arm64 olddefconfig
 
       - name: Compiler le Kernel (sm8250 unifié / Android 16)
@@ -194,7 +191,6 @@ jobs:
           export CLANG_TRIPLE=aarch64-linux-gnu-
           export CC=clang
           
-          # Lancement de la compilation lourde
           make -j$(nproc --all) O=out KCFLAGS="-w" Image.gz
 
       - name: Empaqueter avec AnyKernel3
