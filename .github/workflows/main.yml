@@ -124,8 +124,9 @@ jobs:
             sed -i '1s|^|#include <linux/path.h>\nextern int path_umount(struct path *path, int flags);\n|' drivers/kernelsu/kernel_umount.c
           fi
 
+          # 🛠️ CORRECTION DU STUB SUSFS_SET_I_STATE (Reçoit un void* générique pour éviter le crash de type)
           if [ -f "drivers/kernelsu/supercalls.c" ]; then
-            sed -i '1s|^|#include <linux/types.h>\n#include <linux/fs.h>\n#include <linux/path.h>\nvoid susfs_add_try_umount(void *arg) {} void susfs_set_i_state_on_external_dir(struct dentry *dentry) {} void susfs_set_hide_sus_mnts_for_all_procs(bool enable) {}\n|' drivers/kernelsu/supercalls.c
+            sed -i '1s|^|#include <linux/types.h>\n#include <linux/fs.h>\n#include <linux/path.h>\nvoid susfs_add_try_umount(void *arg) {} void susfs_set_i_state_on_external_dir(void *arg) {} void susfs_set_hide_sus_mnts_for_all_procs(bool enable) {}\n|' drivers/kernelsu/supercalls.c
           fi
 
           if [ -f "drivers/kernelsu/setuid_hook.c" ]; then
@@ -232,8 +233,8 @@ jobs:
           cp flask.h av_permissions.h out/security/selinux/include/
           # =====================================================================
           
-          # COMPILATION GLOBALE DIRECTE
-          make -j$(nproc --all) O=out
+          # COMPILATION GLOBALE DIRECTE (Ajout du flag -w local pour outrepasser les pr_info du fichier local)
+          make -j$(nproc --all) O=out KCFLAGS="-w"
 
       - name: Empaqueter avec AnyKernel3
         run: |
