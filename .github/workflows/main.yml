@@ -88,6 +88,11 @@ jobs:
           # Stub de temps rtc_time64_to_tm corrigé avec le type strict conforme à linux/rtc.h
           sed -i '1s|^|#include <linux/time.h>\nstruct rtc_time; void rtc_time64_to_tm(time64_t time, struct rtc_time *tm) {}\n|' kernel/power/suspend.c
 
+          # 🎯 FIX CHIRURGICAL LOCKDEP : On remplace la variable "nested" non déclarée par sa valeur par défaut (0)
+          if [ -f "kernel/locking/lockdep.c" ]; then
+            sed -i 's/__lock_release(lock, nested, ip)/__lock_release(lock, 0, ip)/g' kernel/locking/lockdep.c
+          fi
+
           # 🔄 FIX MACRO SUSFS DANS SUPERCALLS.C
           if [ -f "drivers/kernelsu/supercalls.c" ]; then
             sed -i 's/CMD_SUSFS_HIDE_SUS_MNTS_FOR_ALL_PROCS/CMD_SUSFS_HIDE_SUS_MNTS_FOR_NON_SU_PROCS/g' drivers/kernelsu/supercalls.c
@@ -152,14 +157,8 @@ jobs:
           # Appliquer les options par défaut d'usine complètes
           make O=out ARCH=arm64 olddefconfig
           
-          # 🛑 DESACTIVATION STRICTE DE LOCKDEP (Pour résoudre l'erreur de compilation)
-          chmod +x scripts/config
-          ./scripts/config --file out/.config --disable CONFIG_LOCKDEP
-          ./scripts/config --file out/.config --disable CONFIG_LOCK_STAT
-          ./scripts/config --file out/.config --disable CONFIG_DEBUG_LOCK_ALLOC
-          ./scripts/config --file out/.config --disable CONFIG_PROVE_LOCKING
-          
           # Injection des paramètres KernelSU-Next & SUSFS
+          chmod +x scripts/config
           ./scripts/config --file out/.config --enable CONFIG_KSU
           ./scripts/config --file out/.config --enable CONFIG_KALLSYMS
           ./scripts/config --file out/.config --enable CONFIG_KALLSYMS_ALL
