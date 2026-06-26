@@ -77,7 +77,7 @@ jobs:
           # Fix E : Configuration du scheduler et stub nohz_flags demandé par le Linker
           sed -i '1s|^|#define NOHZ_KICK_MASK 0x1\nunsigned long nohz_flags(int cpu) { return 0; }\n|' kernel/sched/core.c
           
-          # Fix F : Structure BPF (Correction propre du bpf_stats_handler sans casser proc_dointvec)
+          # Fix F : Structure BPF
           sed -i '1s|^|#include <linux/jump_label.h>\nDEFINE_STATIC_KEY_FALSE(bpf_stats_enabled_key);\n|' kernel/sysctl.c
           
           if [ -f "drivers/firmware/efi/efi.c" ]; then
@@ -90,6 +90,16 @@ jobs:
           # 🎯 FIX CHIRURGICAL LOCKDEP : On remplace la variable "nested" non déclarée par sa valeur par défaut (0)
           if [ -f "kernel/locking/lockdep.c" ]; then
             sed -i 's/__lock_release(lock, nested, ip)/__lock_release(lock, 0, ip)/g' kernel/locking/lockdep.c
+          fi
+
+          # 🎯 FIX MOTO DISPLAY : Correction du doublon "static static"
+          if [ -f "techpack/display/msm/dsi/dsi_display_mot_ext.c" ]; then
+            sed -i 's/static static struct alarm/static struct alarm/g' techpack/display/msm/dsi/dsi_display_mot_ext.c
+          fi
+
+          # 🎯 FIX FAULT-INJECT : Décomposition de l'expression WRITE_ONCE pour plaire à la macro stricte
+          if [ -f "lib/fault-inject.c" ]; then
+            sed -i 's/if (!WRITE_ONCE(current->fail_nth, fail_nth - 1))/WRITE_ONCE(current->fail_nth, fail_nth - 1); if (current->fail_nth == 0)/g' lib/fault-inject.c
           fi
 
           # 🔄 FIX MACRO SUSFS DANS SUPERCALLS.C
@@ -190,6 +200,7 @@ jobs:
           export CLANG_TRIPLE=aarch64-linux-gnu-
           export CC=clang
           
+          # Lancement de la compilation avec KCFLAGS -w pour ignorer les faux-positifs de taille de buffers de Qualcomm IPA
           make -j$(nproc --all) O=out KCFLAGS="-w" Image.gz
 
       - name: Empaqueter avec AnyKernel3
