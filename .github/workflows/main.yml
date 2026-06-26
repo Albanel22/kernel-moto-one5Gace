@@ -79,7 +79,7 @@ jobs:
             sed -i 's/mmap_sem/mmap_lock/g' drivers/firmware/efi/efi.c
           fi
 
-          # 🎯 FIX CHIRURGICAL LOCKDEP : Déclarations des stubs en HAUT de fichier pour éviter les déclarations implicites int()
+          # 🎯 FIX CHIRURGICAL LOCKDEP : Injection propre avec les bons types
           if [ -f "kernel/locking/lockdep.c" ]; then
             sed -i '1s|^|void *get_pending_free(void) { return (void *)0; }\nvoid __lockdep_free_key_range(void *start, unsigned long size) {}\nvoid call_rcu_zapped(void *p) {}\n|' kernel/locking/lockdep.c
             sed -i 's/__lock_release(lock, nested, ip)/__lock_release(lock, 0, ip)/g' kernel/locking/lockdep.c
@@ -172,7 +172,7 @@ jobs:
           
           yes "" | make O=out ARCH=arm64 olddefconfig
 
-      - name: Compiler le Kernel (sm8250 unifié / Android 16)
+      - name: Compiler le Kernel (Diagnostic - Mode 1 Cœur)
         run: |
           cd kernel-source
           export ARCH=arm64
@@ -181,7 +181,8 @@ jobs:
           export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
           export CLANG_TRIPLE=aarch64-linux-gnu-
           export CC=clang
-          make -j$(nproc --all) O=out KCFLAGS="-w -Wno-error" Image.gz
+          # 🎯 Utilisation de -j1 pour stopper net exactement sur l'erreur
+          make -j1 O=out KCFLAGS="-w -Wno-error" Image.gz
 
       - name: Empaqueter avec AnyKernel3
         run: |
