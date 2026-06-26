@@ -76,8 +76,10 @@ jobs:
           sed -i '1s|^|int alarm_debug = 0;\n|' kernel/time/alarmtimer.c
           sed -i '1s|^|typedef unsigned int compat_uptr_t;\n|' include/linux/filter.h
           
-          # Fix E & Links manquants : Base Motorola
-          sed -i '1s|^|#define NOHZ_KICK_MASK 0x1\nint nohz_flags = 0;\n|' kernel/sched/core.c
+          # Fix E : Suppression de l'entier gênant nohz_flags, on garde uniquement la macro si nécessaire
+          sed -i '1s|^|#define NOHZ_KICK_MASK 0x1\n|' kernel/sched/core.c
+          
+          # Fix F : Gestionnaire d'entiers standard
           sed -i '1s|^|#define bpf_stats_handler proc_dointvec\nint bpf_stats_enabled_key = 0;\n|' kernel/sysctl.c
           
           if [ -f "drivers/firmware/efi/efi.c" ]; then
