@@ -111,13 +111,13 @@ jobs:
             sed -i '1s|^|#include <linux/lsm_hooks.h>\nstruct security_hook_heads security_hook_heads; void security_add_hooks(struct security_hook_list *hooks, int count, char *lsm) {}\n|' drivers/kernelsu/lsm_hooks.c
           fi
 
-          # INJECTION DES STUBS RE-TYPÉS ET SIGNATURES EXACTES (FIX POUR PATH_UMOUNT CONFLIT)
+          # STUBS SUSFS CENTRALISÉS ET PROPRES (SANS TOUT CE QUI EST DÉJÀ DANS LES EN-TÊTES DU NOYAU ET SANS LES DOUBLONS)
           if [ -f "drivers/kernelsu/supercalls.c" ]; then
-            sed -i '1s|^|#include <linux/types.h>\n#include <linux/fs.h>\n#include <linux/path.h>\nvoid susfs_add_try_umount(void *arg) {} void susfs_set_i_state_on_external_dir(struct dentry *dentry) {} void susfs_set_hide_sus_mnts_for_all_procs(bool enable) {}\nvoid susfs_reorder_mnt_id(void) {} void susfs_run_sus_path_loop(uid_t uid) {}\nint path_umount(struct path *path, int flags) { return 0; }\nvoid susfs_try_umount(uid_t uid) {}\n|' drivers/kernelsu/supercalls.c
+            sed -i '1s|^|#include <linux/types.h>\n#include <linux/fs.h>\n#include <linux/path.h>\nvoid susfs_add_try_umount(void *arg) {} void susfs_set_i_state_on_external_dir(struct dentry *dentry) {} void susfs_set_hide_sus_mnts_for_all_procs(bool enable) {}\n|' drivers/kernelsu/supercalls.c
           fi
 
           if [ -f "drivers/kernelsu/kernel_umount.c" ]; then
-            sed -i '1s|^|#include <linux/fs.h>\n#include <linux/path.h>\nint path_umount(struct path *path, int flags) { return 0; }\n|' drivers/kernelsu/kernel_umount.c
+            sed -i '1s|^|#include <linux/fs.h>\n#include <linux/path.h>\n|' drivers/kernelsu/kernel_umount.c
           fi
 
           if [ -f "drivers/kernelsu/setuid_hook.c" ]; then
