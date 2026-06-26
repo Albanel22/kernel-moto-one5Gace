@@ -117,11 +117,10 @@ jobs:
             sed -i '1s|^|#include <linux/lsm_hooks.h>\nstruct security_hook_heads security_hook_heads; void security_add_hooks(struct security_hook_list *hooks, int count, char *lsm) {}\n|' drivers/kernelsu/lsm_hooks.c
           fi
 
-          # 🧠 ÉLIMINATION RADICALE DES ERREURS "RELOCATION TRUNCATED" SUR LES HOOKS
-          # On injecte les variables directement au début des fichiers cibles pour un adressage mémoire absolu
-          sed -i '1s|^|#include <linux/types.h>\nbool ksu_is_init_rc_hook_enabled = false;\n|' fs/read_write.c
-          sed -i '1s|^|#include <linux/types.h>\nbool ksu_is_init_rc_hook_enabled = false;\n|' fs/stat.c
-          sed -i '1s|^|#include <linux/types.h>\nbool ksu_is_input_hook_enabled = false;\nint ksu_handle_vfs_fstat(int fd, void *stat) { return 0; }\n|' drivers/input/input.c
+          # 🧠 INSTANCIATION DES VÉRITABLES CLÉS STATIQUES (JUMP LABELS) POUR EVITER TOUTE RE-LOCATION TRUNCATED SUR ARM64
+          sed -i '1s|^|#include <linux/jump_label.h>\nDEFINE_STATIC_KEY_TRUE(ksu_is_init_rc_hook_enabled);\n|' fs/read_write.c
+          sed -i '1s|^|#include <linux/jump_label.h>\nDEFINE_STATIC_KEY_TRUE(ksu_is_init_rc_hook_enabled);\n|' fs/stat.c
+          sed -i '1s|^|#include <linux/jump_label.h>\nDEFINE_STATIC_KEY_TRUE(ksu_is_input_hook_enabled);\nint ksu_handle_vfs_fstat(int fd, void *stat) { return 0; }\n|' drivers/input/input.c
 
           if [ -f "drivers/kernelsu/supercalls.c" ]; then
             sed -i '1s|^|#include <linux/types.h>\n#include <linux/fs.h>\n#include <linux/path.h>\nvoid susfs_add_try_umount(void *arg) {} void susfs_set_i_state_on_external_dir(struct dentry *dentry) {} void susfs_set_hide_sus_mnts_for_all_procs(bool enable) {}\n|' drivers/kernelsu/supercalls.c
