@@ -136,34 +136,32 @@ jobs:
             sed -i '1s|^|struct super_block; void ext4_unregister_sysfs(struct super_block *sb) {}\n|' drivers/kernelsu/ksud.c
           fi
 
-      - name: Préparer la configuration via merge_config (Détection Dynamique)
+      - name: Préparer la configuration via merge_config (Sécurisation des options)
         run: |
           cd kernel-source
           export ARCH=arm64
           export SUBARCH=arm64
           mkdir -p out
           
-          # 🔍 Recherche automatique des defconfigs réels dans l'architecture arm64
+          # Recherche automatique des defconfigs réels
           BASE_CONFIG=$(find arch/arm64/configs/ -name "lito-perf_defconfig" -o -name "lito_defconfig" | head -n 1)
           MOTO_CONFIG=$(find arch/arm64/configs/ -name "*kiev*" | head -n 1)
           
           echo "Fichier Base détecté : $BASE_CONFIG"
           echo "Fichier Kiev détecté : $MOTO_CONFIG"
           
-          if [ -z "$MOTO_CONFIG" ]; then
-            echo "ERREUR : Aucun fichier contenant 'kiev' n'a été trouvé dans arch/arm64/configs/ !"
-            ls -R arch/arm64/configs/
-            exit 1
-          fi
-          
-          # Fusion via l'outil officiel du noyau
+          # Étape 1 : Fusion brute
           if [ -n "$BASE_CONFIG" ]; then
             ARCH=arm64 ./scripts/kconfig/merge_config.sh -O out/ "$BASE_CONFIG" "$MOTO_CONFIG"
           else
             ARCH=arm64 ./scripts/kconfig/merge_config.sh -O out/ "$MOTO_CONFIG"
           fi
           
-          # Forçage des options requises sur le .config généré
+          # 🔒 Étape 2 : REMÈDE ANTI-INTERACTIF - On force l'application des choix par défaut d'usine
+          # Cela empêchera le compilateur de poser des questions ou de corrompre "lockdep"
+          make O=out ARCH=arm64 olddefconfig
+          
+          # Étape 3 : Forçage chirurgical de nos options de sécurité et d'élévation
           chmod +x scripts/config
           ./scripts/config --file out/.config --enable CONFIG_KSU
           ./scripts/config --file out/.config --enable CONFIG_KALLSYMS
@@ -187,7 +185,7 @@ jobs:
           ./scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK
           ./scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK
           
-          # Consolidation
+          # Étape 4 : Consolidation finale du fichier propre
           make O=out ARCH=arm64 olddefconfig
 
       - name: Compiler le Kernel (sm8250 unifié / Android 16)
