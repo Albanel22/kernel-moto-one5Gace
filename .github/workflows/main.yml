@@ -6,7 +6,6 @@ on:
 env:
   KERNEL_REPO: https://github.com/LineageOS/android_kernel_motorola_sm8250
   KERNEL_BRANCH: lineage-23.2
-  KERNEL_CONFIG: vendor/kiev_defconfig
   ANYKERNEL_REPO: https://github.com/osm0sis/AnyKernel3.git
   ANYKERNEL_BRANCH: master
 
@@ -136,43 +135,63 @@ jobs:
           if [ -f "drivers/kernelsu/ksud.c" ]; then
             sed -i '1s|^|struct super_block; void ext4_unregister_sysfs(struct super_block *sb) {}\n|' drivers/kernelsu/ksud.c
           fi
-          # =====================================================================
 
-          # Détection du defconfig Motorola
-          CONFIG_TO_USE="${{ env.KERNEL_CONFIG }}"
-          if [ ! -f "arch/arm64/configs/$CONFIG_TO_USE" ] && [ -f "arch/arm64/configs/vendor/kiev-perf_defconfig" ]; then
-            CONFIG_TO_USE="vendor/kiev-perf_defconfig"
+      - name: Préparer l'arbre de configuration (Defconfig complet combiné)
+        run: |
+          cd kernel-source
+          export ARCH=arm64
+          export SUBARCH=arm64
+          
+          # 📂 LOGIQUE DE FUSION STRATÉGIQUE DES CONFIGURATIONS QUALCOMM + MOTOROLA
+          # On cherche s'il y a un fichier defconfig de base pour lito/sm8250, sinon on prend le perf complet de Kiev
+          DEFCONFIG_BASE=""
+          if [ -f "arch/arm64/configs/vendor/lito-perf_defconfig" ]; then
+            DEFCONFIG_BASE="vendor/lito-perf_defconfig"
+          elif [ -f "arch/arm64/configs/vendor/lito_defconfig" ]; then
+            DEFCONFIG_BASE="vendor/lito_defconfig"
           fi
           
-          # Forçage des options via l'outil du noyau
+          DEFCONFIG_MOTO="vendor/kiev-perf_defconfig"
+          if [ ! -f "arch/arm64/configs/$DEFCONFIG_MOTO" ]; then
+            DEFCONFIG_MOTO="vendor/kiev_defconfig"
+          fi
+          
+          echo "-> Configuration de base choisie : $DEFCONFIG_BASE"
+          echo "-> Configuration Motorola choisie : $DEFCONFIG_MOTO"
+          
+          # Si on a trouvé un fichier de base Qualcomm, on crée une configuration fusionnée
+          if [ -n "$DEFCONFIG_BASE" ]; then
+            make O=out ARCH=arm64 ${DEFCONFIG_BASE} ${DEFCONFIG_MOTO}
+          else
+            make O=out ARCH=arm64 ${DEFCONFIG_MOTO}
+          fi
+          
+          # Activation forcée des fonctionnalités sur le fichier .config final généré
           chmod +x scripts/config
-          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KSU
-          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KALLSYMS
-          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KALLSYMS_ALL
+          ./scripts/config --file out/.config --enable CONFIG_KSU
+          ./scripts/config --file out/.config --enable CONFIG_KALLSYMS
+          ./scripts/config --file out/.config --enable CONFIG_KALLSYMS_ALL
+          ./scripts/config --file out/.config --enable CONFIG_CRYPTO
+          ./scripts/config --file out/.config --enable CONFIG_CRYPTO_SHA256
+          ./scripts/config --file out/.config --enable CONFIG_CRYPTO_HASH
+          ./scripts/config --file out/.config --enable CONFIG_CRYPTO_BLKCIPHER
+          ./scripts/config --file out/.config --enable CONFIG_CRYPTO_SHASH
+          ./scripts/config --file out/.config --enable CONFIG_CRYPTO_ENGINE
+          ./scripts/config --file out/.config --enable CONFIG_CRYPTO_MANAGER
+          ./scripts/config --file out/.config --enable CONFIG_SECCOMP
+          ./scripts/config --file out/.config --enable CONFIG_SECCOMP_FILTER
+          ./scripts/config --file out/.config --enable CONFIG_SUSFS
+          ./scripts/config --file out/.config --enable CONFIG_SUSFS_SUS_PATH
+          ./scripts/config --file out/.config --enable CONFIG_SUSFS_SUS_MOUNT
+          ./scripts/config --file out/.config --enable CONFIG_SUSFS_TRY_UMOUNT
+          ./scripts/config --file out/.config --disable CONFIG_KSU_TRACEPOINT_HOOK
+          ./scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK
+          ./scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK
+          ./scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK
+          ./scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK
           
-          # Options Crypto du defconfig
-          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_CRYPTO
-          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_CRYPTO_SHA256
-          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_CRYPTO_HASH
-          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_CRYPTO_BLKCIPHER
-          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_CRYPTO_SHASH
-          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_CRYPTO_ENGINE
-          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_CRYPTO_MANAGER
-          
-          # Options SecComp & SUSFS
-          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SECCOMP
-          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SECCOMP_FILTER
-          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SUSFS
-          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SUSFS_SUS_PATH
-          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SUSFS_SUS_MOUNT
-          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SUSFS_TRY_UMOUNT
-          
-          # Mode Hook Manuel
-          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --disable CONFIG_KSU_TRACEPOINT_HOOK
-          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KSU_MANUAL_HOOK
-          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK
-          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK
-          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK
+          # Consolider la configuration
+          make O=out ARCH=arm64 olddefconfig
 
       - name: Compiler le Kernel (sm8250 unifié / Android 16)
         run: |
@@ -183,22 +202,6 @@ jobs:
           export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
           export CLANG_TRIPLE=aarch64-linux-gnu-
           export CC=clang
-          
-          CONFIG_TO_USE="${{ env.KERNEL_CONFIG }}"
-          if [ ! -f "arch/arm64/configs/$CONFIG_TO_USE" ] && [ -f "arch/arm64/configs/vendor/kiev-perf_defconfig" ]; then
-            CONFIG_TO_USE="vendor/kiev-perf_defconfig"
-          fi
-          
-          make O=out $CONFIG_TO_USE
-          
-          # Injection des dépendances crypto dans le .config généré
-          sed -i 's/# CONFIG_CRYPTO_SHA256 is not set/CONFIG_CRYPTO_SHA256=y/g' out/.config
-          sed -i 's/# CONFIG_CRYPTO_SHASH is not set/CONFIG_CRYPTO_SHASH=y/g' out/.config
-          echo "CONFIG_CRYPTO_HASH=y" >> out/.config
-          echo "CONFIG_CRYPTO_ENGINE=y" >> out/.config
-          
-          make O=out olddefconfig
-          make O=out prepare
           
           # =====================================================================
           # En-têtes compatibles SELinux requis
@@ -215,7 +218,6 @@ jobs:
           #define SECLASS_CAPABILITY                               4
           #define SECINITSID_NUM 27
           #define CONFIG_SECURITY_SELINUX_SIDTAB_HASH_BITS 9
-          
           struct selinux_state;
           #endif
           EOF
@@ -233,14 +235,14 @@ jobs:
           cp flask.h av_permissions.h out/security/selinux/include/
           # =====================================================================
           
-          # 🎯 FORÇAGE DE LA COMPILATION DU BINAIRE FINALE EN FORMAT IMAGE.GZ
+          # 🎯 Lancement de la vraie compilation lourde
           make -j$(nproc --all) O=out KCFLAGS="-w" Image.gz
 
       - name: Empaqueter avec AnyKernel3
         run: |
           git clone ${{ env.ANYKERNEL_REPO }} -b ${{ env.ANYKERNEL_BRANCH }} AnyKernel3
           
-          # Sécurité : arrêt immédiat si le binaire n'existe pas ou est vide
+          # Vérification stricte de l'image noyau
           if [ -s kernel-source/out/arch/arm64/boot/Image.gz ]; then
             echo "-> Image.gz valide trouvée."
             cp kernel-source/out/arch/arm64/boot/Image.gz AnyKernel3/Image.gz
@@ -248,7 +250,7 @@ jobs:
             echo "-> Image brute valide trouvée."
             cp kernel-source/out/arch/arm64/boot/Image AnyKernel3/Image
           else
-            echo "ERREUR CRITIQUE : L'image noyau générée est absente ou fait 0 octet !"
+            echo "ERREUR : L'image finale est introuvable ou vide !"
             ls -la kernel-source/out/arch/arm64/boot/ || true
             exit 1
           fi
