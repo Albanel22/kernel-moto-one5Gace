@@ -233,22 +233,23 @@ jobs:
           cp flask.h av_permissions.h out/security/selinux/include/
           # =====================================================================
           
-          # COMPILATION GLOBALE DIRECTE
-          make -j$(nproc --all) O=out KCFLAGS="-w"
+          # 🎯 FORÇAGE DE LA COMPILATION DU BINAIRE FINALE EN FORMAT IMAGE.GZ
+          make -j$(nproc --all) O=out KCFLAGS="-w" Image.gz
 
       - name: Empaqueter avec AnyKernel3
         run: |
           git clone ${{ env.ANYKERNEL_REPO }} -b ${{ env.ANYKERNEL_BRANCH }} AnyKernel3
           
-          # Sécurité : arrêt immédiat si le binaire n'existe pas
-          if [ -f kernel-source/out/arch/arm64/boot/Image.gz ]; then
-            echo "-> Image.gz trouvée."
+          # Sécurité : arrêt immédiat si le binaire n'existe pas ou est vide
+          if [ -s kernel-source/out/arch/arm64/boot/Image.gz ]; then
+            echo "-> Image.gz valide trouvée."
             cp kernel-source/out/arch/arm64/boot/Image.gz AnyKernel3/Image.gz
-          elif [ -f kernel-source/out/arch/arm64/boot/Image ]; then
-            echo "-> Image brute trouvée."
+          elif [ -s kernel-source/out/arch/arm64/boot/Image ]; then
+            echo "-> Image brute valide trouvée."
             cp kernel-source/out/arch/arm64/boot/Image AnyKernel3/Image
           else
-            echo "ERREUR : Le compilateur n'a généré aucun fichier d'image noyau !"
+            echo "ERREUR CRITIQUE : L'image noyau générée est absente ou fait 0 octet !"
+            ls -la kernel-source/out/arch/arm64/boot/ || true
             exit 1
           fi
           
