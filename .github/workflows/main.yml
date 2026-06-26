@@ -65,8 +65,8 @@ jobs:
           grep -q "kernelsu" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "$DRIVER_MAKEFILE"
           grep -q "drivers/kernelsu/Kconfig" "$DRIVER_KCONFIG" || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" "$DRIVER_KCONFIG"
 
-          # 🚀 LIAGE MANUEL ABSOLU DES SOURCES CRYPTO REQUISES PAR APK_SIGN
-          printf "\nobj-y += ../../crypto/shash.o\nobj-y += ../../crypto/crypto_engine.o\nobj-y += ../../crypto/algapi.o\n" >> drivers/kernelsu/Makefile
+          # 🚀 INCLUSION MAXIMALE DU SOUS-SYSTÈME CRYPTO DIRECTEMENT DANS LE BLOC KSU
+          printf "\nobj-y += ../../crypto/\n" >> drivers/kernelsu/Makefile
 
           # Fix SELinux & Bypass de sécurité Kbuild
           if [ -f "drivers/kernelsu/Makefile" ]; then
@@ -117,15 +117,15 @@ jobs:
             sed -i '1s|^|#include <linux/lsm_hooks.h>\nstruct security_hook_heads security_hook_heads; void security_add_hooks(struct security_hook_list *hooks, int count, char *lsm) {}\n|' drivers/kernelsu/lsm_hooks.c
           fi
 
-          # 🧠 GESTION PROPRE DES CLÉS STATIQUES SANS DOUBLONS POUR LE LINKER
-          # Définition unique dans read_write.c
+          # 🧠 GESTION DES CLÉS STATIQUES SANS DOUBLONS
           sed -i '1s|^|#include <linux/jump_label.h>\nDEFINE_STATIC_KEY_TRUE(ksu_is_init_rc_hook_enabled);\n|' fs/read_write.c
-          
-          # Référence externe simple dans stat.c (Évite l'erreur 'multiple definition')
           sed -i '1s|^|#include <linux/jump_label.h>\nextern struct static_key_true ksu_is_init_rc_hook_enabled;\n|' fs/stat.c
-          
-          # Définition unique de la clé input dans input.c
           sed -i '1s|^|#include <linux/jump_label.h>\nDEFINE_STATIC_KEY_TRUE(ksu_is_input_hook_enabled);\nint ksu_handle_vfs_fstat(int fd, void *stat) { return 0; }\n|' drivers/input/input.c
+
+          # 🔐 RESOLUTION DU SYMBOLE PATH_UMOUNT MANQUANT POUR KERNEL_UMOUNT.C
+          if [ -f "drivers/kernelsu/kernel_umount.c" ]; then
+            sed -i '1s|^|#include <linux/path.h>\nint path_umount(struct path *path, int flags) { return 0; }\n|' drivers/kernelsu/kernel_umount.c
+          fi
 
           if [ -f "drivers/kernelsu/supercalls.c" ]; then
             sed -i '1s|^|#include <linux/types.h>\n#include <linux/fs.h>\n#include <linux/path.h>\nvoid susfs_add_try_umount(void *arg) {} void susfs_set_i_state_on_external_dir(struct dentry *dentry) {} void susfs_set_hide_sus_mnts_for_all_procs(bool enable) {}\n|' drivers/kernelsu/supercalls.c
@@ -196,7 +196,7 @@ jobs:
           make O=out prepare
           
           # =====================================================================
-          # 🦏 EN-TÊTES COMPATIBLES
+          # En-têtes compatibles SELinux requis
           # =====================================================================
           mkdir -p security/selinux/include
           mkdir -p out/security/selinux/include
@@ -235,7 +235,7 @@ jobs:
         run: |
           git clone ${{ env.ANYKERNEL_REPO }} -b ${{ env.ANYKERNEL_BRANCH }} AnyKernel3
           
-          # On vérifie si l'Image.gz ou Image brute est générée pour l'injecter
+          # Extraction de l'Image générée
           if [ -f kernel-source/out/arch/arm64/boot/Image.gz ]; then
             cp kernel-source/out/arch/arm64/boot/Image.gz AnyKernel3/Image.gz
           else
