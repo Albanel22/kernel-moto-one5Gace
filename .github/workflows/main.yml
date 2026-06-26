@@ -119,8 +119,7 @@ jobs:
           sed -i '1s|^|#include <linux/jump_label.h>\nextern struct static_key_true ksu_is_init_rc_hook_enabled;\n|' fs/stat.c
           sed -i '1s|^|#include <linux/jump_label.h>\nDEFINE_STATIC_KEY_TRUE(ksu_is_input_hook_enabled);\nint ksu_handle_vfs_fstat(int fd, void *stat) { return 0; }\n|' drivers/input/input.c
 
-          # 🔐 EXPORTATION DU SYMBOLE PATH_UMOUNT DEPUIS LE NOYAU POUR EVITER LE MULTIPLE DEFINITION
-          # On l'indique simplement comme externe dans kernel_umount.c au lieu de recréer une fonction
+          # 🔐 DECLARATION EXTERNE STRICTE POUR PATH_UMOUNT
           if [ -f "drivers/kernelsu/kernel_umount.c" ]; then
             sed -i '1s|^|#include <linux/path.h>\nextern int path_umount(struct path *path, int flags);\n|' drivers/kernelsu/kernel_umount.c
           fi
@@ -150,7 +149,7 @@ jobs:
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KALLSYMS
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KALLSYMS_ALL
           
-          # Force crypto globale requise pour le hachage d'apk_sign.c
+          # Options Crypto du defconfig
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_CRYPTO
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_CRYPTO_SHA256
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_CRYPTO_HASH
@@ -159,17 +158,15 @@ jobs:
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_CRYPTO_ENGINE
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_CRYPTO_MANAGER
           
-          # Force seccomp
+          # Options SecComp & SUSFS
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SECCOMP
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SECCOMP_FILTER
-          
-          # Activation des options SUSFS
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SUSFS
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SUSFS_SUS_PATH
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SUSFS_SUS_MOUNT
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SUSFS_TRY_UMOUNT
           
-          # Mode de Hook Manuel propre
+          # Mode Hook Manuel
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --disable CONFIG_KSU_TRACEPOINT_HOOK
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KSU_MANUAL_HOOK
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK
@@ -193,7 +190,7 @@ jobs:
           
           make O=out $CONFIG_TO_USE
           
-          # 🚀 INJECTION COMPLÈTE ET FORCÉE DES LIENS CRYPTO DANS LE .CONFIG GÉNÉRÉ
+          # Injection des dépendances crypto dans le .config généré
           sed -i 's/# CONFIG_CRYPTO_SHA256 is not set/CONFIG_CRYPTO_SHA256=y/g' out/.config
           sed -i 's/# CONFIG_CRYPTO_SHASH is not set/CONFIG_CRYPTO_SHASH=y/g' out/.config
           echo "CONFIG_CRYPTO_HASH=y" >> out/.config
@@ -235,18 +232,23 @@ jobs:
           cp flask.h av_permissions.h out/security/selinux/include/
           # =====================================================================
           
-          # Lancement de la compilation globale finale
-          make -j$(nproc --all) O=out KCFLAGS="-w" || make O=out KCFLAGS="-w"
+          # COMPILATION GLOBALE DIRECTE
+          make -j$(nproc --all) O=out
 
       - name: Empaqueter avec AnyKernel3
         run: |
           git clone ${{ env.ANYKERNEL_REPO }} -b ${{ env.ANYKERNEL_BRANCH }} AnyKernel3
           
-          # Extraction de l'Image générée
+          # Sécurité : arrêt immédiat si le binaire n'existe pas
           if [ -f kernel-source/out/arch/arm64/boot/Image.gz ]; then
+            echo "-> Image.gz trouvée."
             cp kernel-source/out/arch/arm64/boot/Image.gz AnyKernel3/Image.gz
-          else
+          elif [ -f kernel-source/out/arch/arm64/boot/Image ]; then
+            echo "-> Image brute trouvée."
             cp kernel-source/out/arch/arm64/boot/Image AnyKernel3/Image
+          else
+            echo "ERREUR : Le compilateur n'a généré aucun fichier d'image noyau !"
+            exit 1
           fi
           
           cd AnyKernel3
