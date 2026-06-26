@@ -104,10 +104,15 @@ jobs:
             sed -i 's/CMD_SUSFS_HIDE_SUS_MNTS_FOR_ALL_PROCS/CMD_SUSFS_HIDE_SUS_MNTS_FOR_NON_SU_PROCS/g' drivers/kernelsu/supercalls.c
           fi
 
-          # 🧠 INJECTION DE SÉCURITÉ : Déclaration des symboles globaux d'intégration (Prototype ksu_handle_vfs_fstat corrigé avec loff_t *)
+          # 🧠 INJECTION DE SÉCURITÉ : Déclaration des symboles globaux d'intégration (VFS Hooks)
           sed -i '1s|^|#include <linux/jump_label.h>\nstruct static_key_true ksu_is_init_rc_hook_enabled = STATIC_KEY_TRUE_INIT;\n|' fs/read_write.c
           sed -i '1s|^|#include <linux/types.h>\n#include <linux/jump_label.h>\nvoid ksu_handle_vfs_fstat(int fd, loff_t *kstat_size_ptr) {}\n|' fs/stat.c
           sed -i '1s|^|#include <linux/jump_label.h>\nstruct static_key_true ksu_is_input_hook_enabled = STATIC_KEY_TRUE_INIT;\n|' drivers/input/input.c
+
+          # 🧠 STUBS RCU TRACING MANQUANTS POUR LE TRAMPOLINE BPF / KSU
+          if [ -f "kernel/rcu/update.c" ]; then
+            echo -e '#include <linux/lockdep.h>\nstruct lockdep_map rcu_trace_lock_map;\nvoid rcu_read_unlock_trace_special(struct task_struct *t) {}' >> kernel/rcu/update.c
+          fi
 
           # 🛑 STUBS ATTACHÉS AUX SUPERCALLS INTERNES SUSFS MANQUANTS
           echo -e '#include <linux/types.h>\n#include <linux/fs.h>\n#include <linux/path.h>\nvoid susfs_try_umount(uid_t uid) {}\nvoid susfs_reorder_mnt_id(void) {}\nvoid susfs_run_sus_path_loop(uid_t uid) {}\nint path_umount(struct path *path, int flags) { return 0; }\nvoid susfs_add_try_umount(void *arg) {}\nvoid susfs_set_i_state_on_external_dir(void *arg) {}\nvoid susfs_set_hide_sus_mnts_for_all_procs(bool enable) {}' >> drivers/kernelsu/ksud.c
