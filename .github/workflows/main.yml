@@ -76,8 +76,8 @@ jobs:
           sed -i '1s|^|int alarm_debug = 0;\n|' kernel/time/alarmtimer.c
           sed -i '1s|^|typedef unsigned int compat_uptr_t;\n|' include/linux/filter.h
           
-          # Fix E : Configuration du scheduler
-          sed -i '1s|^|#define NOHZ_KICK_MASK 0x1\n|' kernel/sched/core.c
+          # Fix E : Configuration du scheduler et stub nohz_flags demandé par le Linker
+          sed -i '1s|^|#define NOHZ_KICK_MASK 0x1\nunsigned long nohz_flags(int cpu) { return 0; }\n|' kernel/sched/core.c
           
           # Fix F : Structure BPF
           sed -i '1s|^|#include <linux/jump_label.h>\n#define bpf_stats_handler proc_dointvec\nDEFINE_STATIC_KEY_FALSE(bpf_stats_enabled_key);\n|' kernel/sysctl.c
@@ -85,6 +85,9 @@ jobs:
           if [ -f "drivers/firmware/efi/efi.c" ]; then
             sed -i 's/mmap_sem/mmap_lock/g' drivers/firmware/efi/efi.c
           fi
+
+          # Stub de temps rtc_time64_to_tm manquant dans la config Motorola
+          sed -i '1s|^|struct rtc_time; void rtc_time64_to_tm(unsigned long long time, struct rtc_time *tm) {}\n|' kernel/power/suspend.c
 
           # ✂️ RECONSTRUCTION CHIRURGICALE DES FONCTIONS DE SÉCURITÉ DANS OBJSEC.H
           if [ -f "security/selinux/include/objsec.h" ]; then
@@ -111,9 +114,9 @@ jobs:
             sed -i '1s|^|#include <linux/lsm_hooks.h>\nstruct security_hook_heads security_hook_heads; void security_add_hooks(struct security_hook_list *hooks, int count, char *lsm) {}\n|' drivers/kernelsu/lsm_hooks.c
           fi
 
-          # 🚨 NETTOYAGE : ON RETIRE LE STUB DE PATH_UMOUNT CAR LE NOYAU LE POSSÈDE DÉJÀ NATURELLEMENT
+          # Centralisation de TOUS les stubs de hooks non définis réclamés par le linker pour l'input, fstat et initrc
           if [ -f "drivers/kernelsu/supercalls.c" ]; then
-            sed -i '1s|^|#include <linux/types.h>\n#include <linux/fs.h>\n#include <linux/path.h>\nvoid susfs_add_try_umount(void *arg) {} void susfs_set_i_state_on_external_dir(struct dentry *dentry) {} void susfs_set_hide_sus_mnts_for_all_procs(bool enable) {}\n|' drivers/kernelsu/supercalls.c
+            sed -i '1s|^|#include <linux/types.h>\n#include <linux/fs.h>\n#include <linux/path.h>\nbool ksu_is_init_rc_hook_enabled = false; bool ksu_is_input_hook_enabled = false; int ksu_handle_vfs_fstat(int fd, void *stat) { return 0; }\nvoid susfs_add_try_umount(void *arg) {} void susfs_set_i_state_on_external_dir(struct dentry *dentry) {} void susfs_set_hide_sus_mnts_for_all_procs(bool enable) {}\n|' drivers/kernelsu/supercalls.c
           fi
 
           if [ -f "drivers/kernelsu/setuid_hook.c" ]; then
@@ -137,10 +140,11 @@ jobs:
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KALLSYMS
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KALLSYMS_ALL
           
-          # Force crypto d'API
+          # Force crypto globale requise pour le hachage d'apk_sign.c
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_CRYPTO_SHA256
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_CRYPTO_HASH
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_CRYPTO_BLKCIPHER
+          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_CRYPTO_SHASH
           
           # Force seccomp
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SECCOMP
