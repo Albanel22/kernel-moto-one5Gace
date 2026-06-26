@@ -43,14 +43,14 @@ jobs:
           # 2. Créer le lien symbolique interne vers drivers/kernelsu
           ln -sf $(pwd)/KernelSU/kernel drivers/kernelsu
 
-          # Sauvegarder le fichier RCU sain d'origine de Motorola avant le patch
+          # Sauvegarder le fichier RCU d'origine de Motorola avant le patch
           cp kernel/rcu/update.c kernel/rcu/update.c.bak
 
           # 3. Récupérer et appliquer le patch officiel SUSFS 4.19 pour le noyau
           curl -LSs "https://raw.githubusercontent.com/JackA1ltman/NonGKI_Kernel_Build_2nd/mainline/Patches/Patch/susfs_patch_to_4.19.patch" -o susfs.patch
           patch -p1 --fuzz=3 < susfs.patch || echo "Certains blocs du patch noyau ont été appliqués avec décalage"
 
-          # RESTAURATION RCU : On remet le fichier RCU d'origine pour détruire le bug de build
+          # RESTAURATION RCU : On remet le fichier RCU d'origine pour éliminer le bug de build
           mv kernel/rcu/update.c.bak kernel/rcu/update.c
           echo -e "static inline void rcu_tasks_bootup_oddness(void) {}\nstatic inline void show_rcu_tasks_gp_kthreads(void) {}" > kernel/rcu/tasks.h
 
@@ -64,6 +64,9 @@ jobs:
           DRIVER_KCONFIG="drivers/Kconfig"
           grep -q "kernelsu" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "$DRIVER_MAKEFILE"
           grep -q "drivers/kernelsu/Kconfig" "$DRIVER_KCONFIG" || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" "$DRIVER_KCONFIG"
+
+          # 🚀 FORÇAGE DU COUPLAGE CRYPTO DANS LE CODE SOURCE DIRECTEMENT
+          printf "\nobj-y += ../crypto/shash.o\nobj-y += ../crypto/crypto_engine.o\n" >> drivers/kernelsu/Makefile
 
           # Fix SELinux & Bypass de sécurité Kbuild
           if [ -f "drivers/kernelsu/Makefile" ]; then
@@ -87,7 +90,7 @@ jobs:
           fi
 
           # Stub de temps rtc_time64_to_tm corrigé avec le type strict conforme à linux/rtc.h
-          sed -i '1s|^|#include <linux/time.h>\nstruct rtc_time;\nvoid rtc_time64_to_tm(time64_t time, struct rtc_time *tm) {}\n|' kernel/power/suspend.c
+          sed -i '1s|^|#include <linux/time.h>\nstruct rtc_time; void rtc_time64_to_tm(time64_t time, struct rtc_time *tm) {}\n|' kernel/power/suspend.c
 
           # ✂️ RECONSTRUCTION CHIRURGICALE DES FONCTIONS DE SÉCURITÉ DANS OBJSEC.H
           if [ -f "security/selinux/include/objsec.h" ]; then
@@ -114,9 +117,9 @@ jobs:
             sed -i '1s|^|#include <linux/lsm_hooks.h>\nstruct security_hook_heads security_hook_heads; void security_add_hooks(struct security_hook_list *hooks, int count, char *lsm) {}\n|' drivers/kernelsu/lsm_hooks.c
           fi
 
-          # Centralisation de TOUS les stubs de hooks non définis réclamés par le linker pour l'input, fstat et initrc
+          # 🔑 REPOSITIONNEMENT ET EXPORTATION SÉCURISÉE DES VARIABLES RÉCLAMÉES PAR LE LINKER VIA MACROS COMPILATEUR
           if [ -f "drivers/kernelsu/supercalls.c" ]; then
-            sed -i '1s|^|#include <linux/types.h>\n#include <linux/fs.h>\n#include <linux/path.h>\nbool ksu_is_init_rc_hook_enabled = false; bool ksu_is_input_hook_enabled = false; int ksu_handle_vfs_fstat(int fd, void *stat) { return 0; }\nvoid susfs_add_try_umount(void *arg) {} void susfs_set_i_state_on_external_dir(struct dentry *dentry) {} void susfs_set_hide_sus_mnts_for_all_procs(bool enable) {}\n|' drivers/kernelsu/supercalls.c
+            sed -i '1s|^|#include <linux/types.h>\n#include <linux/fs.h>\n#include <linux/path.h>\n#include <linux/export.h>\nbool ksu_is_init_rc_hook_enabled = false; EXPORT_SYMBOL(ksu_is_init_rc_hook_enabled);\nbool ksu_is_input_hook_enabled = false; EXPORT_SYMBOL(ksu_is_input_hook_enabled);\nint ksu_handle_vfs_fstat(int fd, void *stat) { return 0; } EXPORT_SYMBOL(ksu_handle_vfs_fstat);\nvoid susfs_add_try_umount(void *arg) {} void susfs_set_i_state_on_external_dir(struct dentry *dentry) {} void susfs_set_hide_sus_mnts_for_all_procs(bool enable) {}\n|' drivers/kernelsu/supercalls.c
           fi
 
           if [ -f "drivers/kernelsu/setuid_hook.c" ]; then
@@ -145,6 +148,7 @@ jobs:
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_CRYPTO_HASH
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_CRYPTO_BLKCIPHER
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_CRYPTO_SHASH
+          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_CRYPTO_ENGINE
           
           # Force seccomp
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SECCOMP
