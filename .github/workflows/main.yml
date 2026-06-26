@@ -65,9 +65,6 @@ jobs:
           grep -q "kernelsu" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "$DRIVER_MAKEFILE"
           grep -q "drivers/kernelsu/Kconfig" "$DRIVER_KCONFIG" || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" "$DRIVER_KCONFIG"
 
-          # 🚀 INCLUSION MAXIMALE DU SOUS-SYSTÈME CRYPTO DIRECTEMENT DANS LE BLOC KSU
-          printf "\nobj-y += ../../crypto/\n" >> drivers/kernelsu/Makefile
-
           # Fix SELinux & Bypass de sécurité Kbuild
           if [ -f "drivers/kernelsu/Makefile" ]; then
             sed -i '1s|^|ccflags-y += -DEXPECT_MANUAL_HOOK=1 -I$(srctree)/security/selinux -I$(srctree)/security/selinux/include -I$(objtree)/security/selinux -I$(objtree)/security/selinux/include\n|' drivers/kernelsu/Makefile
@@ -122,9 +119,10 @@ jobs:
           sed -i '1s|^|#include <linux/jump_label.h>\nextern struct static_key_true ksu_is_init_rc_hook_enabled;\n|' fs/stat.c
           sed -i '1s|^|#include <linux/jump_label.h>\nDEFINE_STATIC_KEY_TRUE(ksu_is_input_hook_enabled);\nint ksu_handle_vfs_fstat(int fd, void *stat) { return 0; }\n|' drivers/input/input.c
 
-          # 🔐 RESOLUTION DU SYMBOLE PATH_UMOUNT MANQUANT POUR KERNEL_UMOUNT.C
+          # 🔐 EXPORTATION DU SYMBOLE PATH_UMOUNT DEPUIS LE NOYAU POUR EVITER LE MULTIPLE DEFINITION
+          # On l'indique simplement comme externe dans kernel_umount.c au lieu de recréer une fonction
           if [ -f "drivers/kernelsu/kernel_umount.c" ]; then
-            sed -i '1s|^|#include <linux/path.h>\nint path_umount(struct path *path, int flags) { return 0; }\n|' drivers/kernelsu/kernel_umount.c
+            sed -i '1s|^|#include <linux/path.h>\nextern int path_umount(struct path *path, int flags);\n|' drivers/kernelsu/kernel_umount.c
           fi
 
           if [ -f "drivers/kernelsu/supercalls.c" ]; then
@@ -153,11 +151,13 @@ jobs:
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_KALLSYMS_ALL
           
           # Force crypto globale requise pour le hachage d'apk_sign.c
+          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_CRYPTO
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_CRYPTO_SHA256
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_CRYPTO_HASH
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_CRYPTO_BLKCIPHER
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_CRYPTO_SHASH
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_CRYPTO_ENGINE
+          ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_CRYPTO_MANAGER
           
           # Force seccomp
           ./scripts/config --file arch/arm64/configs/$CONFIG_TO_USE --enable CONFIG_SECCOMP
@@ -192,6 +192,13 @@ jobs:
           fi
           
           make O=out $CONFIG_TO_USE
+          
+          # 🚀 INJECTION COMPLÈTE ET FORCÉE DES LIENS CRYPTO DANS LE .CONFIG GÉNÉRÉ
+          sed -i 's/# CONFIG_CRYPTO_SHA256 is not set/CONFIG_CRYPTO_SHA256=y/g' out/.config
+          sed -i 's/# CONFIG_CRYPTO_SHASH is not set/CONFIG_CRYPTO_SHASH=y/g' out/.config
+          echo "CONFIG_CRYPTO_HASH=y" >> out/.config
+          echo "CONFIG_CRYPTO_ENGINE=y" >> out/.config
+          
           make O=out olddefconfig
           make O=out prepare
           
