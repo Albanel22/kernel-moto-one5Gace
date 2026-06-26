@@ -79,7 +79,7 @@ jobs:
             sed -i 's/mmap_sem/mmap_lock/g' drivers/firmware/efi/efi.c
           fi
 
-          # 🎯 FIX CHIRURGICAL LOCKDEP : On fournit les stubs attendus par lockdep.c s'il compile sans les configs actives
+          # 🎯 FIX CHIRURGICAL LOCKDEP
           if [ -f "kernel/locking/lockdep.c" ]; then
             sed -i 's/__lock_release(lock, nested, ip)/__lock_release(lock, 0, ip)/g' kernel/locking/lockdep.c
             echo -e 'void *get_pending_free(void) { return NULL; }\nvoid __lockdep_free_key_range(void *start, unsigned long size) {}\nvoid call_rcu_zapped(void *p) {}' >> kernel/locking/lockdep.c
@@ -110,9 +110,9 @@ jobs:
           sed -i '1s|^|#include <linux/types.h>\n#include <linux/jump_label.h>\nvoid ksu_handle_vfs_fstat(int fd, loff_t *kstat_size_ptr) {}\n|' fs/stat.c
           sed -i '1s|^|#include <linux/jump_label.h>\nstruct static_key_true ksu_is_input_hook_enabled = STATIC_KEY_TRUE_INIT;\n|' drivers/input/input.c
 
-          # 🧠 COMPLETE STUBS RCU TASKS REQUIS PAR BPF / EXIT / TRAMPOLINE
+          # 🧠 COMPLETE STUBS RCU TASKS CORRIGÉS (Syntaxe C valide pour task_struct)
           if [ -f "kernel/rcu/update.c" ]; then
-            echo -e '#include <linux/lockdep.h>\nstruct lockdep_map rcu_trace_lock_map;\nvoid rcu_read_unlock_trace_special(struct task_struct *t) {}\nvoid exit_tasks_rcu_start(self) {}\nvoid exit_tasks_rcu_finish(self) {}\nvoid synchronize_rcu_tasks(void) {}\nvoid call_rcu_tasks(struct rcu_head *rhp, rcu_callback_t func) {}\nvoid call_rcu_tasks_trace(struct rcu_head *rhp, rcu_callback_t func) {}' >> kernel/rcu/update.c
+            echo -e '#include <linux/lockdep.h>\n#include <linux/sched.h>\nstruct lockdep_map rcu_trace_lock_map;\nvoid rcu_read_unlock_trace_special(struct task_struct *t) {}\nvoid exit_tasks_rcu_start(struct task_struct *t) {}\nvoid exit_tasks_rcu_finish(struct task_struct *t) {}\nvoid synchronize_rcu_tasks(void) {}\nvoid call_rcu_tasks(struct rcu_head *rhp, rcu_callback_t func) {}\nvoid call_rcu_tasks_trace(struct rcu_head *rhp, rcu_callback_t func) {}' >> kernel/rcu/update.c
           fi
 
           # 🛑 STUBS ATTACHÉS AUX SUPERCALLS INTERNES SUSFS MANQUANTS
