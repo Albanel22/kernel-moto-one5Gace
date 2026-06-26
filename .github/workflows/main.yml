@@ -104,9 +104,9 @@ jobs:
             sed -i 's/CMD_SUSFS_HIDE_SUS_MNTS_FOR_ALL_PROCS/CMD_SUSFS_HIDE_SUS_MNTS_FOR_NON_SU_PROCS/g' drivers/kernelsu/supercalls.c
           fi
 
-          # 🧠 INJECTION DE SÉCURITÉ : Déclaration des symboles globaux d'intégration manuels requis par le Hooking VFS
+          # 🧠 INJECTION DE SÉCURITÉ : Déclaration des symboles globaux d'intégration (Prototype ksu_handle_vfs_fstat corrigé avec loff_t *)
           sed -i '1s|^|#include <linux/jump_label.h>\nstruct static_key_true ksu_is_init_rc_hook_enabled = STATIC_KEY_TRUE_INIT;\n|' fs/read_write.c
-          sed -i '1s|^|#include <linux/jump_label.h>\nint ksu_handle_vfs_fstat(int fd, void *stat) { return 0; }\n|' fs/stat.c
+          sed -i '1s|^|#include <linux/types.h>\n#include <linux/jump_label.h>\nvoid ksu_handle_vfs_fstat(int fd, loff_t *kstat_size_ptr) {}\n|' fs/stat.c
           sed -i '1s|^|#include <linux/jump_label.h>\nstruct static_key_true ksu_is_input_hook_enabled = STATIC_KEY_TRUE_INIT;\n|' drivers/input/input.c
 
           # 🛑 STUBS ATTACHÉS AUX SUPERCALLS INTERNES SUSFS MANQUANTS
