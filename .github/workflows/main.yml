@@ -72,14 +72,13 @@ jobs:
           # =====================================================================
           # Correctifs spécifiques résiduels à la base Motorola + SUSFS
           # =====================================================================
-          # REMARQUE : alarm_debug a été retiré d'ici car déjà présent d'origine !
           sed -i '1s|^|typedef unsigned int compat_uptr_t;\n|' include/linux/filter.h
           
           # Fix E : Configuration du scheduler et stub nohz_flags demandé par le Linker
           sed -i '1s|^|#define NOHZ_KICK_MASK 0x1\nunsigned long nohz_flags(int cpu) { return 0; }\n|' kernel/sched/core.c
           
-          # Fix F : Structure BPF
-          sed -i '1s|^|#include <linux/jump_label.h>\n#define bpf_stats_handler proc_dointvec\nDEFINE_STATIC_KEY_FALSE(bpf_stats_enabled_key);\n|' kernel/sysctl.c
+          # Fix F : Structure BPF (Correction propre du bpf_stats_handler sans casser proc_dointvec)
+          sed -i '1s|^|#include <linux/jump_label.h>\nDEFINE_STATIC_KEY_FALSE(bpf_stats_enabled_key);\n|' kernel/sysctl.c
           
           if [ -f "drivers/firmware/efi/efi.c" ]; then
             sed -i 's/mmap_sem/mmap_lock/g' drivers/firmware/efi/efi.c
