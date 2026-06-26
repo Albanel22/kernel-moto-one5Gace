@@ -117,9 +117,14 @@ jobs:
             sed -i '1s|^|#include <linux/lsm_hooks.h>\nstruct security_hook_heads security_hook_heads; void security_add_hooks(struct security_hook_list *hooks, int count, char *lsm) {}\n|' drivers/kernelsu/lsm_hooks.c
           fi
 
-          # 🧠 INSTANCIATION DES VÉRITABLES CLÉS STATIQUES (JUMP LABELS) POUR EVITER TOUTE RE-LOCATION TRUNCATED SUR ARM64
+          # 🧠 GESTION PROPRE DES CLÉS STATIQUES SANS DOUBLONS POUR LE LINKER
+          # Définition unique dans read_write.c
           sed -i '1s|^|#include <linux/jump_label.h>\nDEFINE_STATIC_KEY_TRUE(ksu_is_init_rc_hook_enabled);\n|' fs/read_write.c
-          sed -i '1s|^|#include <linux/jump_label.h>\nDEFINE_STATIC_KEY_TRUE(ksu_is_init_rc_hook_enabled);\n|' fs/stat.c
+          
+          # Référence externe simple dans stat.c (Évite l'erreur 'multiple definition')
+          sed -i '1s|^|#include <linux/jump_label.h>\nextern struct static_key_true ksu_is_init_rc_hook_enabled;\n|' fs/stat.c
+          
+          # Définition unique de la clé input dans input.c
           sed -i '1s|^|#include <linux/jump_label.h>\nDEFINE_STATIC_KEY_TRUE(ksu_is_input_hook_enabled);\nint ksu_handle_vfs_fstat(int fd, void *stat) { return 0; }\n|' drivers/input/input.c
 
           if [ -f "drivers/kernelsu/supercalls.c" ]; then
