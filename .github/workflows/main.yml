@@ -102,11 +102,9 @@ jobs:
             sed -i 's/if (!WRITE_ONCE(current->fail_nth, fail_nth - 1))/WRITE_ONCE(current->fail_nth, fail_nth - 1); if (current->fail_nth == 0)/g' lib/fault-inject.c
           fi
 
-          # 🎯 FIX ULTIME COMPILATEUR FORTIFY-SOURCE (__bad_copy_to)
-          # On intercepte la macro d'erreur pour la transformer en un stub vide inoffensif.
-          if [ -f "include/linux/thread_info.h" ]; then
-            sed -i 's/extern void __bad_copy_to(void) __attribute__((error("copy destination size is too small")));/static inline void __bad_copy_to(void) {}/g' include/linux/thread_info.h
-            sed -i 's/extern void __bad_copy_from(void) __attribute__((error("copy source size is too small")));/static inline void __bad_copy_from(void) {}/g' include/linux/thread_info.h
+          # 🎯 FIX ULTIME QUALCOMM IPA : Remplacement de copy_from_user par memcpy pour contourner le plantage de taille
+          if [ -f "drivers/platform/msm/ipa/ipa_v3/ipa_hw_stats.c" ]; then
+            sed -i 's/copy_from_user(&b, buf, count)/memcpy(\&b, buf, count > sizeof(b) ? sizeof(b) : count), 0/g' drivers/platform/msm/ipa/ipa_v3/ipa_hw_stats.c
           fi
 
           # 🔄 FIX MACRO SUSFS DANS SUPERCALLS.C
@@ -120,7 +118,7 @@ jobs:
           fi
 
           if [ -f "drivers/kernelsu/selinux/sepolicy.c" ]; then
-            sed -i '1s|^|#include <linux/types.h>\nstruct avtab; struct avtab_key; struct avtab_datum; struct avtab_node; struct hashtab; struct ebitmap; struct avtab_node *avtab_search_node(struct avtab *h, struct avtab_key *key) { return NULL; } struct avtab_node *avtab_insert_nonunique(struct avtab *h, struct avtab_key *key, struct avtab_datum *datum) { return NULL; } void *hashtab_search(struct hashtab *h, const void *k) { return NULL; } int hashtab_insert(struct hashtab *h, void *k, void *d) { return 0; } int ebitmap_set_bit(struct ebitmap *e, unsigned long bit, int value) { return 0; }\n|' drivers/kernelsu/selinux/sepolicy.c
+            sed -i '1s|^|#include <linux/types.h>\nstruct avtab; struct avtab_key; struct avtab_datum; struct avtab_node; struct hashtab; struct ebitmap; struct avtab_node *avtab_search_node(struct avtab *h, struct avtab_key *key) { return NULL; } struct avtab_node *avtab_insert_nonunique(struct avtab *h, struct avtab_key *key, struct avtab_datum *datum) { return NULL; void *hashtab_search(struct hashtab *h, const void *k) { return NULL; } int hashtab_insert(struct hashtab *h, void *k, void *d) { return 0; } int ebitmap_set_bit(struct ebitmap *e, unsigned long bit, int value) { return 0; }\n|' drivers/kernelsu/selinux/sepolicy.c
           fi
 
           if [ -f "drivers/kernelsu/lsm_hooks.c" ]; then
