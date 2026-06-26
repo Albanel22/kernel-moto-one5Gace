@@ -136,37 +136,31 @@ jobs:
             sed -i '1s|^|struct super_block; void ext4_unregister_sysfs(struct super_block *sb) {}\n|' drivers/kernelsu/ksud.c
           fi
 
-      - name: Préparer l'arbre de configuration (Defconfig complet combiné)
+      - name: Préparer la configuration via merge_config (Qualcomm + Motorola)
         run: |
           cd kernel-source
           export ARCH=arm64
           export SUBARCH=arm64
+          mkdir -p out
           
-          # 📂 LOGIQUE DE FUSION STRATÉGIQUE DES CONFIGURATIONS QUALCOMM + MOTOROLA
-          # On cherche s'il y a un fichier defconfig de base pour lito/sm8250, sinon on prend le perf complet de Kiev
-          DEFCONFIG_BASE=""
-          if [ -f "arch/arm64/configs/vendor/lito-perf_defconfig" ]; then
-            DEFCONFIG_BASE="vendor/lito-perf_defconfig"
-          elif [ -f "arch/arm64/configs/vendor/lito_defconfig" ]; then
-            DEFCONFIG_BASE="vendor/lito_defconfig"
+          # Trouver les fichiers physiques réels
+          BASE_CONFIG="arch/arm64/configs/vendor/lito-perf_defconfig"
+          if [ ! -f "$BASE_CONFIG" ]; then
+            BASE_CONFIG="arch/arm64/configs/vendor/lito_defconfig"
           fi
           
-          DEFCONFIG_MOTO="vendor/kiev-perf_defconfig"
-          if [ ! -f "arch/arm64/configs/$DEFCONFIG_MOTO" ]; then
-            DEFCONFIG_MOTO="vendor/kiev_defconfig"
+          MOTO_CONFIG="arch/arm64/configs/vendor/kiev-perf_defconfig"
+          if [ ! -f "$MOTO_CONFIG" ]; then
+            MOTO_CONFIG="arch/arm64/configs/vendor/kiev_defconfig"
           fi
           
-          echo "-> Configuration de base choisie : $DEFCONFIG_BASE"
-          echo "-> Configuration Motorola choisie : $DEFCONFIG_MOTO"
+          echo "Base: $BASE_CONFIG"
+          echo "Moto: $MOTO_CONFIG"
           
-          # Si on a trouvé un fichier de base Qualcomm, on crée une configuration fusionnée
-          if [ -n "$DEFCONFIG_BASE" ]; then
-            make O=out ARCH=arm64 ${DEFCONFIG_BASE} ${DEFCONFIG_MOTO}
-          else
-            make O=out ARCH=arm64 ${DEFCONFIG_MOTO}
-          fi
+          # Étape 1 : Fusionner les deux fragments officiels dans le dossier de build "out"
+          ARCH=arm64 ./scripts/kconfig/merge_config.sh -O out/ "$BASE_CONFIG" "$MOTO_CONFIG"
           
-          # Activation forcée des fonctionnalités sur le fichier .config final généré
+          # Étape 2 : Injecter de force nos options requises pour KernelSU-Next et SUSFS
           chmod +x scripts/config
           ./scripts/config --file out/.config --enable CONFIG_KSU
           ./scripts/config --file out/.config --enable CONFIG_KALLSYMS
@@ -190,7 +184,7 @@ jobs:
           ./scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK
           ./scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK
           
-          # Consolider la configuration
+          # Étape 3 : Consolider les dépendances du fichier généré
           make O=out ARCH=arm64 olddefconfig
 
       - name: Compiler le Kernel (sm8250 unifié / Android 16)
@@ -235,19 +229,19 @@ jobs:
           cp flask.h av_permissions.h out/security/selinux/include/
           # =====================================================================
           
-          # 🎯 Lancement de la vraie compilation lourde
+          # Lancement de la vraie compilation lourde complète
           make -j$(nproc --all) O=out KCFLAGS="-w" Image.gz
 
       - name: Empaqueter avec AnyKernel3
         run: |
           git clone ${{ env.ANYKERNEL_REPO }} -b ${{ env.ANYKERNEL_BRANCH }} AnyKernel3
           
-          # Vérification stricte de l'image noyau
+          # Vérification du fichier de sortie
           if [ -s kernel-source/out/arch/arm64/boot/Image.gz ]; then
-            echo "-> Image.gz valide trouvée."
+            echo "-> Image.gz complète trouvée !"
             cp kernel-source/out/arch/arm64/boot/Image.gz AnyKernel3/Image.gz
           elif [ -s kernel-source/out/arch/arm64/boot/Image ]; then
-            echo "-> Image brute valide trouvée."
+            echo "-> Image brute complète trouvée !"
             cp kernel-source/out/arch/arm64/boot/Image AnyKernel3/Image
           else
             echo "ERREUR : L'image finale est introuvable ou vide !"
