@@ -1,4 +1,4 @@
-name: Build Kernel ReSukiSU/KSUN - Moto Kiev (Ravindu Clean V10)
+name: Build Kernel ReSukiSU/KSUN - Moto Kiev (Ravindu Clean V11)
 on:
   workflow_dispatch:
 
@@ -30,12 +30,12 @@ jobs:
         run: |
           git clone ${{ env.KERNEL_REPO }} -b ${{ env.KERNEL_BRANCH }} --depth=1 kernel-source
 
-      - name: Injecter KernelSU-Next & Intégration Manuelle VFS
+      - name: Injecter KernelSU-Next Officiel & Intégration Manuelle VFS
         run: |
           cd kernel-source
 
-          # 1. Cloner la branche legacy dédiée aux noyaux 4.19 de KernelSU-Next
-          git clone -b legacy https://github.com/wshamroukh/KernelSU-Next-SUSFS-kernelv4.19.git KernelSU
+          # 1. Cloner le dépôt OFFICIEL et propre de KernelSU-Next
+          git clone https://github.com/rifsxd/KernelSU-Next.git KernelSU
 
           # 2. Créer le lien symbolique interne requis
           ln -sf $(pwd)/KernelSU/kernel drivers/kernelsu
@@ -49,10 +49,10 @@ jobs:
           # NEUTRALISATION DE L'ARRÊT FORCE (Transformation error -> warning)
           # =====================================================================
           if [ -f "drivers/kernelsu/Kbuild" ]; then
-            sed -i 's/\$(error -- KernelSU-Next: No hooks were defined/\$(warning -- KernelSU-Next: No hooks were defined/g' drivers/kernelsu/Kbuild
+            sed -i 's/\$(error -- KernelSU-Next: No hooks were defined/\frac{}{\$(warning -- KernelSU-Next: No hooks were defined}/g' drivers/kernelsu/Kbuild
           fi
           if [ -f "drivers/kernelsu/Makefile" ]; then
-            sed -i 's/\$(error -- KernelSU-Next: No hooks were defined/\$(warning -- KernelSU-Next: No hooks were defined/g' drivers/kernelsu/Makefile
+            sed -i 's/\$(error -- KernelSU-Next: No hooks were defined/\frac{}{\$(warning -- KernelSU-Next: No hooks were defined}/g' drivers/kernelsu/Makefile
           fi
 
           # Injection des variables et flags directement au sommet de KernelSU-Next
@@ -97,8 +97,6 @@ jobs:
           if [ -f "drivers/platform/msm/ipa/ipa_v3/ipa_hw_stats.c" ]; then
             sed -i '/ssize_t ipa_debugfs_enable_disable_drop_stats/,/^}/c\ssize_t ipa_debugfs_enable_disable_drop_stats(struct file *file, const char __user *buf, size_t count, loff_t *ppos) { return count; }' drivers/platform/msm/ipa/ipa_v3/ipa_hw_stats.c
           fi
-
-          echo -e '#include <linux/types.h>\n#include <linux/fs.h>\nvoid susfs_try_umount(uid_t uid) {}\nvoid susfs_reorder_mnt_id(void) {}\nvoid susfs_run_sus_path_loop(uid_t uid) {}\nvoid susfs_add_try_umount(void *arg) {}\nvoid susfs_set_i_state_on_external_dir(void *arg) {}\nvoid susfs_set_hide_sus_mnts_for_all_procs(bool enable) {}' >> drivers/kernelsu/ksud.c
 
       - name: Préparer la configuration via merge_config
         run: |
