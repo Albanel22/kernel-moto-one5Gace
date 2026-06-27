@@ -1,4 +1,4 @@
-name: Build Kernel ReSukiSU/KSUN - Moto Kiev (Ravindu Optimized)
+name: Build Kernel ReSukiSU/KSUN - Moto Kiev (Ravindu Optimized V2)
 on:
   workflow_dispatch:
 
@@ -87,7 +87,6 @@ jobs:
           fi
 
           # Neutralisation des stubs SUSFS manquants directement dans le gestionnaire KSUN
-          # Cela évite que le linker plante parce que le patch SUSFS brut n'est pas appliqué à l'aveugle
           echo -e '#include <linux/types.h>\n#include <linux/fs.h>\nvoid susfs_try_umount(uid_t uid) {}\nvoid susfs_reorder_mnt_id(void) {}\nvoid susfs_run_sus_path_loop(uid_t uid) {}\nvoid susfs_add_try_umount(void *arg) {}\nvoid susfs_set_i_state_on_external_dir(void *arg) {}\nvoid susfs_set_hide_sus_mnts_for_all_procs(bool enable) {}' >> drivers/kernelsu/ksud.c
 
       - name: Préparer la configuration via merge_config
@@ -114,7 +113,7 @@ jobs:
           ./scripts/config --file out/.config --enable CONFIG_SECCOMP
           ./scripts/config --file out/.config --enable CONFIG_SECCOMP_FILTER
           
-          # Forcer les Hooks Manuels natifs de KSUN (Plus de conflit avec la mémoire du Moto)
+          # Forcer les Hooks Manuels natifs de KSUN
           ./scripts/config --file out/.config --disable CONFIG_KSU_TRACEPOINT_HOOK
           ./scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK
           ./scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK
@@ -122,7 +121,7 @@ jobs:
           ./scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK
           ./scripts/config --file out/.config --disable CONFIG_FORTIFY_SOURCE
           
-          # Nettoyage radical des modules de tracking qui causent les Kernel Panic au démarrage
+          # Nettoyage radical des modules de tracking qui causent les plantages de compilation
           ./scripts/config --file out/.config --disable CONFIG_PROVE_LOCKING
           ./scripts/config --file out/.config --disable CONFIG_LOCKDEP
           
