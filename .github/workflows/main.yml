@@ -56,23 +56,30 @@ jobs:
           fi
 
           # =====================================================================
-          # CORRECTIFS LIENS ET LINKER (Surgical Patch)
+          # CORRECTIFS LIENS ET LINKER (Macro-injection sans briser la syntaxe C)
           # =====================================================================
-          # Au lieu d'écraser le fichier, on neutralise UNIQUEMENT les appels de démontage impossibles
           python3 -c "
-          import os, re
+          import os
           fp = 'drivers/kernelsu/feature/kernel_umount.c'
           if os.path.exists(fp):
               with open(fp, 'r') as f:
-                  content = f.read()
+                  lines = f.readlines()
               
-              # Remplace les appels à path_umount(...) ou do_umount(...) par 0 (Inoffensif pour le système)
-              content = re.sub(r'path_umount\([^)]*\)', '0', content)
-              content = re.sub(r'do_umount\([^)]*\)', '0', content)
+              new_lines = []
+              # Injecter les surcharges de macros sécurisées au tout début du fichier
+              new_lines.append('#define path_umount(...) 0\n')
+              new_lines.append('#define do_umount(...) 0\n')
               
+              for line in lines:
+                  # Commenter les prototypes de fonctions extern pour éviter 'extern int 0;'
+                  if 'extern int path_umount' in line or 'extern int do_umount' in line:
+                      new_lines.append('// ' + line)
+                  else:
+                      new_lines.append(line)
+                      
               with open(fp, 'w') as f:
-                  f.write(content)
-              print('Successfully patched kernel_umount.c without breaking other functions!')
+                  f.writelines(new_lines)
+              print('Successfully applied macro bypass to kernel_umount.c safely!')
           "
 
           # Désactivation du point de trace Vendor Hook fantôme dans fs/open.c
