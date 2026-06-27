@@ -1,4 +1,4 @@
-name: Build Kernel ReSukiSU/KSUN - Moto Kiev (Ravindu Optimized V2)
+name: Build Kernel ReSukiSU/KSUN - Moto Kiev (Ravindu Clean V3)
 on:
   workflow_dispatch:
 
@@ -65,7 +65,7 @@ jobs:
           sed -i '1s|^|#include <linux/jump_label.h>\nstruct static_key_true ksu_is_input_hook_enabled = STATIC_KEY_TRUE_INIT;\n|' drivers/input/input.c
 
           # =====================================================================
-          # Correctifs de compatibilité spécifiques Clang / Motorola
+          # Correctifs de compatibilité spécifiques Clang / Motorola (Strict Minimum)
           # =====================================================================
           sed -i '1s|^|typedef unsigned int compat_uptr_t;\n|' include/linux/filter.h
           sed -i '1s|^|#define NOHZ_KICK_MASK 0x1\nunsigned long nohz_flags(int cpu) { return 0; }\n|' kernel/sched/core.c
@@ -94,7 +94,11 @@ jobs:
           cd kernel-source
           export ARCH=arm64
           export SUBARCH=arm64
+          
+          # Élimination stricte de tout résidu de build précédent
+          rm -rf out
           mkdir -p out
+          
           BASE_CONFIG=$(find arch/arm64/configs/ -name "lito-perf_defconfig" -o -name "lito_defconfig" | head -n 1)
           MOTO_CONFIG=$(find arch/arm64/configs/ -name "*kiev*" | head -n 1)
           
@@ -113,7 +117,7 @@ jobs:
           ./scripts/config --file out/.config --enable CONFIG_SECCOMP
           ./scripts/config --file out/.config --enable CONFIG_SECCOMP_FILTER
           
-          # Forcer les Hooks Manuels natifs de KSUN
+          # Forcer les Hooks Manuels natifs de KSUN (Méthode Ravindu)
           ./scripts/config --file out/.config --disable CONFIG_KSU_TRACEPOINT_HOOK
           ./scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK
           ./scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK
@@ -121,9 +125,11 @@ jobs:
           ./scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK
           ./scripts/config --file out/.config --disable CONFIG_FORTIFY_SOURCE
           
-          # Nettoyage radical des modules de tracking qui causent les plantages de compilation
+          # Désactivation complète et définitive de toute la suite LOCKDEP / LOCK_STAT
           ./scripts/config --file out/.config --disable CONFIG_PROVE_LOCKING
           ./scripts/config --file out/.config --disable CONFIG_LOCKDEP
+          ./scripts/config --file out/.config --disable CONFIG_LOCK_STAT
+          ./scripts/config --file out/.config --disable CONFIG_DEBUG_LOCK_ALLOC
           
           yes "" | make O=out ARCH=arm64 olddefconfig
 
