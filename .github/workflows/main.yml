@@ -1,4 +1,4 @@
-name: Build Kernel ReSukiSU/KSUN - Moto Kiev (Ravindu Clean V8)
+name: Build Kernel ReSukiSU/KSUN - Moto Kiev (Ravindu Clean V9)
 on:
   workflow_dispatch:
 
@@ -40,39 +40,32 @@ jobs:
           # 2. Créer le lien symbolique interne requis
           ln -sf $(pwd)/KernelSU/kernel drivers/kernelsu
 
-          # 3. Liaison Kconfig et Makefile ultra-robuste
+          # 3. Liaison Makefile de base
           DRIVER_MAKEFILE="drivers/Makefile"
           grep -q "kernelsu" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "$DRIVER_MAKEFILE"
           
-          # Injection universelle : on colle la source partout où les pilotes sont appelés
-          find . -name "Kconfig" -type f -exec sed -i '/source "drivers\/Kconfig"/a source "drivers/kernelsu/Kconfig"' {} +
-          find . -name "Kconfig" -type f -exec sed -i "/source 'drivers\/Kconfig'/a source \"drivers\/kernelsu\/Kconfig\"" {} +
+          # Inclusion de secours dans le Kconfig racine
           echo 'source "drivers/kernelsu/Kconfig"' >> Kconfig
 
-          # Injection des drapeaux SELinux sur le Makefile ET le Kbuild de KernelSU-Next
+          # =====================================================================
+          # BYPASS RADICAL KCONFIG : Injection directe en dur dans KernelSU-Next
+          # =====================================================================
           for f in drivers/kernelsu/Makefile drivers/kernelsu/Kbuild; do
             if [ -f "$f" ]; then
-              sed -i '1s|^|ccflags-y += -DEXPECT_MANUAL_HOOK=1 -I$(srctree)/security/selinux -I$(srctree)/security/selinux/include -I$(objtree)/security/selinux -I$(objtree)/security/selinux/include\n|' "$f"
+              sed -i '1s|^|CONFIG_KSU_MANUAL_HOOK := y\nCONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK := y\nCONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK := y\nCONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK := y\nccflags-y += -DCONFIG_KSU_MANUAL_HOOK=1 -DCONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK=1 -DCONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK=1 -DCONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK=1 -DEXPECT_MANUAL_HOOK=1 -I$(srctree)/security/selinux -I$(srctree)/security/selinux/include -I$(objtree)/security/selinux -I$(objtree)/security/selinux/include\n|' "$f"
             fi
           done
 
           # =====================================================================
           # MÉTHODE RAVINDU : HOOKS SUR MESURE POUR PASSER LE CONTROLE MÉMOIRE MOTO
           # =====================================================================
-          
-          # Interception de l'initialisation système (fs/read_write.c)
           sed -i '1s|^|#include <linux/jump_label.h>\nstruct static_key_true ksu_is_init_rc_hook_enabled = STATIC_KEY_TRUE_INIT;\n|' fs/read_write.c
-          
-          # Crochet sécurisé pour l'état des fichiers (fs/stat.c)
           sed -i '1s|^|#include <linux/types.h>\n#include <linux/fs.h>\n#include <linux/file.h>\n#include <linux/jump_label.h>\nvoid ksu_handle_vfs_fstat(int fd, loff_t *kstat_size_ptr) {\n    struct file *file = fget(fd);\n    if (file) {\n        if (kstat_size_ptr) *kstat_size_ptr = i_size_read(file_inode(file));\n        fput(file);\n    }\n}\n|' fs/stat.c
-          
-          # Crochet pour l'interception des inputs tactiles (drivers/input/input.c)
           sed -i '1s|^|#include <linux/jump_label.h>\nstruct static_key_true ksu_is_input_hook_enabled = STATIC_KEY_TRUE_INIT;\n|' drivers/input/input.c
 
           # =====================================================================
           # Correctifs de compatibilité spécifiques Clang / Motorola (Strict Minimum)
           # =====================================================================
-          
           if [ -f "lib/Kconfig.debug" ]; then
             sed -i 's/config LOCKDEP/config LOCKDEP_DISABLED/g' lib/Kconfig.debug
             sed -i 's/config DEBUG_LOCK_ALLOC/config DEBUG_LOCK_ALLOC_DISABLED/g' lib/Kconfig.debug
@@ -99,7 +92,6 @@ jobs:
             sed -i '/ssize_t ipa_debugfs_enable_disable_drop_stats/,/^}/c\ssize_t ipa_debugfs_enable_disable_drop_stats(struct file *file, const char __user *buf, size_t count, loff_t *ppos) { return count; }' drivers/platform/msm/ipa/ipa_v3/ipa_hw_stats.c
           fi
 
-          # Neutralisation des stubs SUSFS manquants directement dans le gestionnaire KSUN
           echo -e '#include <linux/types.h>\n#include <linux/fs.h>\nvoid susfs_try_umount(uid_t uid) {}\nvoid susfs_reorder_mnt_id(void) {}\nvoid susfs_run_sus_path_loop(uid_t uid) {}\nvoid susfs_add_try_umount(void *arg) {}\nvoid susfs_set_i_state_on_external_dir(void *arg) {}\nvoid susfs_set_hide_sus_mnts_for_all_procs(bool enable) {}' >> drivers/kernelsu/ksud.c
 
       - name: Préparer la configuration via merge_config
@@ -119,7 +111,6 @@ jobs:
           BASE_CONFIG=$(find arch/arm64/configs/ -name "lito-perf_defconfig" -o -name "lito_defconfig" | head -n 1)
           MOTO_CONFIG=$(find arch/arm64/configs/ -name "*kiev*" | head -n 1)
           
-          # Injection native directe de l'environnement KernelSU-Next dans le fichier defconfig d'origine
           if [ -n "$MOTO_CONFIG" ]; then
             echo "" >> "$MOTO_CONFIG"
             echo "CONFIG_KSU=y" >> "$MOTO_CONFIG"
@@ -128,11 +119,6 @@ jobs:
             echo "CONFIG_SECCOMP=y" >> "$MOTO_CONFIG"
             echo "CONFIG_SECCOMP_FILTER=y" >> "$MOTO_CONFIG"
             echo "CONFIG_JUMP_LABEL=y" >> "$MOTO_CONFIG"
-            echo "# CONFIG_KSU_TRACEPOINT_HOOK is not set" >> "$MOTO_CONFIG"
-            echo "CONFIG_KSU_MANUAL_HOOK=y" >> "$MOTO_CONFIG"
-            echo "CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK=y" >> "$MOTO_CONFIG"
-            echo "CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK=y" >> "$MOTO_CONFIG"
-            echo "CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK=y" >> "$MOTO_CONFIG"
             echo "# CONFIG_FORTIFY_SOURCE is not set" >> "$MOTO_CONFIG"
           fi
           
