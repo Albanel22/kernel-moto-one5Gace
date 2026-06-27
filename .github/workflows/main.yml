@@ -105,7 +105,7 @@ jobs:
             sed -i 's/CMD_SUSFS_HIDE_SUS_MNTS_FOR_ALL_PROCS/CMD_SUSFS_HIDE_SUS_MNTS_FOR_NON_SU_PROCS/g' drivers/kernelsu/supercalls.c
           fi
 
-          # 🧠 INJECTION DE SÉCURITÉ RE-CORRIGÉE (VFS Hooks) : Remplacement complet du stub vide par le code logique fonctionnel pour éviter le Kernel Panic
+          # 🧠 INJECTION DE SÉCURITÉ (VFS Hooks fstat fonctionnel)
           sed -i '1s|^|#include <linux/jump_label.h>\nstruct static_key_true ksu_is_init_rc_hook_enabled = STATIC_KEY_TRUE_INIT;\n|' fs/read_write.c
           sed -i '1s|^|#include <linux/types.h>\n#include <linux/fs.h>\n#include <linux/file.h>\n#include <linux/jump_label.h>\nvoid ksu_handle_vfs_fstat(int fd, loff_t *kstat_size_ptr) {\n    struct file *file = fget(fd);\n    if (file) {\n        if (kstat_size_ptr) *kstat_size_ptr = i_size_read(file_inode(file));\n        fput(file);\n    }\n}\n|' fs/stat.c
           sed -i '1s|^|#include <linux/jump_label.h>\nstruct static_key_true ksu_is_input_hook_enabled = STATIC_KEY_TRUE_INIT;\n|' drivers/input/input.c
@@ -115,8 +115,8 @@ jobs:
             echo -e '#include <linux/lockdep.h>\n#include <linux/sched.h>\nstruct lockdep_map rcu_trace_lock_map;\nvoid rcu_read_unlock_trace_special(struct task_struct *t) {}\nvoid exit_tasks_rcu_start(void) {}\nvoid exit_tasks_rcu_finish(void) {}\nvoid synchronize_rcu_tasks(void) {}\nvoid call_rcu_tasks(struct rcu_head *rhp, rcu_callback_t func) {}\nvoid call_rcu_tasks_trace(struct rcu_head *rhp, rcu_callback_t func) {}' >> kernel/rcu/update.c
           fi
 
-          # 🛑 STUBS CORRIGÉS POUR LIAISON EN-TÊTE SUSFS (Évite les pointeurs morts)
-          echo -e '#include <linux/types.h>\n#include <linux/fs.h>\n#include <linux/path.h>\n#include <linux/susfs.h>\nvoid susfs_try_umount(uid_t uid) { extern void susfs_t_umount(uid_t); susfs_t_umount(uid); }\nvoid susfs_reorder_mnt_id(void) { extern void susfs_r_mnt_id(void); susfs_r_mnt_id(); }\nvoid susfs_run_sus_path_loop(uid_t uid) {}\nvoid susfs_add_try_umount(void *arg) {}\nvoid susfs_set_i_state_on_external_dir(void *arg) {}\nvoid susfs_set_hide_sus_mnts_for_all_procs(bool enable) {}' >> drivers/kernelsu/ksud.c
+          # 🛑 CONFIGURATION DES STUBS AUTONOMES POUR LNK (Résout les undefined reference)
+          echo -e '#include <linux/types.h>\n#include <linux/fs.h>\n#include <linux/path.h>\nint path_umount(struct path *path, int flags) { return 0; }\nvoid susfs_try_umount(uid_t uid) {}\nvoid susfs_reorder_mnt_id(void) {}\nvoid susfs_run_sus_path_loop(uid_t uid) {}\nvoid susfs_add_try_umount(void *arg) {}\nvoid susfs_set_i_state_on_external_dir(void *arg) {}\nvoid susfs_set_hide_sus_mnts_for_all_procs(bool enable) {}' >> drivers/kernelsu/ksud.c
 
       - name: Préparer la configuration via merge_config
         run: |
