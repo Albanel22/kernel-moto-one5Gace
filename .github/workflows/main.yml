@@ -1,4 +1,4 @@
-name: Build Kernel ReSukiSU/KSUN - Moto Kiev (Ravindu Clean V5)
+name: Build Kernel ReSukiSU/KSUN - Moto Kiev (Ravindu Clean V6)
 on:
   workflow_dispatch:
 
@@ -40,11 +40,12 @@ jobs:
           # 2. Créer le lien symbolique interne requis
           ln -sf $(pwd)/KernelSU/kernel drivers/kernelsu
 
-          # 3. Lier proprement les fichiers de configuration système
+          # 3. Liaison Kconfig/Makefile sécurisée (sans risques de sous-menus)
           DRIVER_MAKEFILE="drivers/Makefile"
           DRIVER_KCONFIG="drivers/Kconfig"
+          
           grep -q "kernelsu" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "$DRIVER_MAKEFILE"
-          grep -q "drivers/kernelsu/Kconfig" "$DRIVER_KCONFIG" || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" "$DRIVER_KCONFIG"
+          grep -q "drivers/kernelsu/Kconfig" "$DRIVER_KCONFIG" || echo 'source "drivers/kernelsu/Kconfig"' >> "$DRIVER_KCONFIG"
 
           # Injection des drapeaux SELinux indispensables pour KernelSU-Next
           if [ -f "drivers/kernelsu/Makefile" ]; then
@@ -68,7 +69,7 @@ jobs:
           # Correctifs de compatibilité spécifiques Clang / Motorola (Strict Minimum)
           # =====================================================================
           
-          # Désactivation radicale de la suite LOCKDEP au niveau Kconfig maître (Bypass des sélections automatiques)
+          # Désactivation radicale de la suite LOCKDEP au niveau Kconfig maître
           if [ -f "lib/Kconfig.debug" ]; then
             sed -i 's/config LOCKDEP/config LOCKDEP_DISABLED/g' lib/Kconfig.debug
             sed -i 's/config DEBUG_LOCK_ALLOC/config DEBUG_LOCK_ALLOC_DISABLED/g' lib/Kconfig.debug
@@ -102,7 +103,6 @@ jobs:
         run: |
           cd kernel-source
           
-          # Alignement de l'environnement complet de compilation dès l'étape Kconfig
           export ARCH=arm64
           export SUBARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
@@ -116,31 +116,28 @@ jobs:
           BASE_CONFIG=$(find arch/arm64/configs/ -name "lito-perf_defconfig" -o -name "lito_defconfig" | head -n 1)
           MOTO_CONFIG=$(find arch/arm64/configs/ -name "*kiev*" | head -n 1)
           
+          # Injection native directe de l'environnement KernelSU-Next dans le fichier defconfig d'origine
+          if [ -n "$MOTO_CONFIG" ]; then
+            echo "" >> "$MOTO_CONFIG"
+            echo "CONFIG_KSU=y" >> "$MOTO_CONFIG"
+            echo "CONFIG_KALLSYMS=y" >> "$MOTO_CONFIG"
+            echo "CONFIG_KALLSYMS_ALL=y" >> "$MOTO_CONFIG"
+            echo "CONFIG_SECCOMP=y" >> "$MOTO_CONFIG"
+            echo "CONFIG_SECCOMP_FILTER=y" >> "$MOTO_CONFIG"
+            echo "CONFIG_JUMP_LABEL=y" >> "$MOTO_CONFIG"
+            echo "# CONFIG_KSU_TRACEPOINT_HOOK is not set" >> "$MOTO_CONFIG"
+            echo "CONFIG_KSU_MANUAL_HOOK=y" >> "$MOTO_CONFIG"
+            echo "CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK=y" >> "$MOTO_CONFIG"
+            echo "CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK=y" >> "$MOTO_CONFIG"
+            echo "CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK=y" >> "$MOTO_CONFIG"
+            echo "# CONFIG_FORTIFY_SOURCE is not set" >> "$MOTO_CONFIG"
+          fi
+          
           if [ -n "$BASE_CONFIG" ]; then
             ARCH=arm64 ./scripts/kconfig/merge_config.sh -O out/ "$BASE_CONFIG" "$MOTO_CONFIG"
           else
             ARCH=arm64 ./scripts/kconfig/merge_config.sh -O out/ "$MOTO_CONFIG"
           fi
-          make O=out ARCH=arm64 olddefconfig
-
-          # Configuration stricte et optimale pour KernelSU-Next Manuel
-          chmod +x scripts/config
-          ./scripts/config --file out/.config --enable CONFIG_KSU
-          ./scripts/config --file out/.config --enable CONFIG_KALLSYMS
-          ./scripts/config --file out/.config --enable CONFIG_KALLSYMS_ALL
-          ./scripts/config --file out/.config --enable CONFIG_SECCOMP
-          ./scripts/config --file out/.config --enable CONFIG_SECCOMP_FILTER
-          
-          # Forcer la présence de JUMP_LABEL requise pour la méthode Ravindu
-          ./scripts/config --file out/.config --enable CONFIG_JUMP_LABEL
-          
-          # Forcer les Hooks Manuels natifs de KSUN
-          ./scripts/config --file out/.config --disable CONFIG_KSU_TRACEPOINT_HOOK
-          ./scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK
-          ./scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK
-          ./scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK
-          ./scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK
-          ./scripts/config --file out/.config --disable CONFIG_FORTIFY_SOURCE
           
           make O=out ARCH=arm64 olddefconfig
 
