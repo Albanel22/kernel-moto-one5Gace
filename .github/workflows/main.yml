@@ -1,4 +1,4 @@
-name: Build Kernel ReSukiSU/KSUN - Moto Kiev (Ravindu Clean V7)
+name: Build Kernel ReSukiSU/KSUN - Moto Kiev (Ravindu Clean V8)
 on:
   workflow_dispatch:
 
@@ -40,18 +40,21 @@ jobs:
           # 2. Créer le lien symbolique interne requis
           ln -sf $(pwd)/KernelSU/kernel drivers/kernelsu
 
-          # 3. Liaison Kconfig/Makefile au sommet du bloc des pilotes
+          # 3. Liaison Kconfig et Makefile ultra-robuste
           DRIVER_MAKEFILE="drivers/Makefile"
-          
           grep -q "kernelsu" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "$DRIVER_MAKEFILE"
           
-          # Injection juste sous l'ouverture du menu principal pour garantir la lecture des options
-          sed -i '/menu "Device Drivers"/a source "drivers/kernelsu/Kconfig"' drivers/Kconfig
+          # Injection universelle : on colle la source partout où les pilotes sont appelés
+          find . -name "Kconfig" -type f -exec sed -i '/source "drivers\/Kconfig"/a source "drivers/kernelsu/Kconfig"' {} +
+          find . -name "Kconfig" -type f -exec sed -i "/source 'drivers\/Kconfig'/a source \"drivers\/kernelsu\/Kconfig\"" {} +
+          echo 'source "drivers/kernelsu/Kconfig"' >> Kconfig
 
-          # Injection des drapeaux SELinux indispensables pour KernelSU-Next
-          if [ -f "drivers/kernelsu/Makefile" ]; then
-            sed -i '1s|^|ccflags-y += -DEXPECT_MANUAL_HOOK=1 -I$(srctree)/security/selinux -I$(srctree)/security/selinux/include -I$(objtree)/security/selinux -I$(objtree)/security/selinux/include\n|' drivers/kernelsu/Makefile
-          fi
+          # Injection des drapeaux SELinux sur le Makefile ET le Kbuild de KernelSU-Next
+          for f in drivers/kernelsu/Makefile drivers/kernelsu/Kbuild; do
+            if [ -f "$f" ]; then
+              sed -i '1s|^|ccflags-y += -DEXPECT_MANUAL_HOOK=1 -I$(srctree)/security/selinux -I$(srctree)/security/selinux/include -I$(objtree)/security/selinux -I$(objtree)/security/selinux/include\n|' "$f"
+            fi
+          done
 
           # =====================================================================
           # MÉTHODE RAVINDU : HOOKS SUR MESURE POUR PASSER LE CONTROLE MÉMOIRE MOTO
@@ -70,7 +73,6 @@ jobs:
           # Correctifs de compatibilité spécifiques Clang / Motorola (Strict Minimum)
           # =====================================================================
           
-          # Désactivation radicale de la suite LOCKDEP au niveau Kconfig maître
           if [ -f "lib/Kconfig.debug" ]; then
             sed -i 's/config LOCKDEP/config LOCKDEP_DISABLED/g' lib/Kconfig.debug
             sed -i 's/config DEBUG_LOCK_ALLOC/config DEBUG_LOCK_ALLOC_DISABLED/g' lib/Kconfig.debug
