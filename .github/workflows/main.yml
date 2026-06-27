@@ -55,6 +55,20 @@ jobs:
             sed -i 's/\$(error -- KernelSU-Next: No hooks were defined/\$(warning -- KernelSU-Next: No hooks were defined/g' drivers/kernelsu/Makefile
           fi
 
+          # =====================================================================
+          # CORRECTIFS LIENS ET LINKER (Correction des fonctions GKI manquantes)
+          # =====================================================================
+          # Remplacement de path_umount par do_umount (Adaptation 4.19 standard non-GKI)
+          if [ -f "drivers/kernelsu/feature/kernel_umount.c" ]; then
+            sed -i 's/path_umount(path, flags)/do_umount(path->mnt, flags)/g' drivers/kernelsu/feature/kernel_umount.c
+            sed -i 's/path_umount(&path, flags)/do_umount(path.mnt, flags)/g' drivers/kernelsu/feature/kernel_umount.c
+          fi
+
+          # Désactivation du point de trace Vendor Hook fantôme dans fs/open.c
+          if [ -f "fs/open.c" ]; then
+            sed -i 's/trace_android_vh_check_file_open/\/\/ trace_android_vh_check_file_open/g' fs/open.c
+          fi
+
           # Injection des variables et flags directement au sommet de KernelSU-Next
           for f in drivers/kernelsu/Makefile drivers/kernelsu/Kbuild; do
             if [ -f "$f" ]; then
