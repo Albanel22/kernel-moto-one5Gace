@@ -1,4 +1,4 @@
-name: Build Kernel ReSukiSU/KSUN - Motorola Kiev
+name: Build Kernel ReSukiSU/KSUN - Moto Kiev (Ravindu Optimized)
 on:
   workflow_dispatch:
 
@@ -30,93 +30,65 @@ jobs:
         run: |
           git clone ${{ env.KERNEL_REPO }} -b ${{ env.KERNEL_BRANCH }} --depth=1 kernel-source
 
-      - name: Injecter KernelSU-Next, Patch SUSFS et Inline Hooks
+      - name: Injecter KernelSU-Next & Intégration Manuelle VFS
         run: |
           cd kernel-source
 
-          # 1. Cloner le dépôt KernelSU-Next sous "KernelSU"
+          # 1. Cloner la branche legacy dédiée aux noyaux 4.19 de KernelSU-Next
           git clone -b legacy https://github.com/wshamroukh/KernelSU-Next-SUSFS-kernelv4.19.git KernelSU
 
-          # 2. Créer le lien symbolique interne vers drivers/kernelsu
+          # 2. Créer le lien symbolique interne requis
           ln -sf $(pwd)/KernelSU/kernel drivers/kernelsu
 
-          # Sauvegarder le fichier RCU d'origine de Motorola avant le patch
-          cp kernel/rcu/update.c kernel/rcu/update.c.bak
-
-          # 3. Récupérer et appliquer le patch officiel SUSFS 4.19 pour le noyau
-          curl -LSs "https://raw.githubusercontent.com/JackA1ltman/NonGKI_Kernel_Build_2nd/mainline/Patches/Patch/susfs_patch_to_4.19.patch" -o susfs.patch
-          patch -p1 --fuzz=3 --batch < susfs.patch || echo "Certains blocs du patch noyau ont été appliqués avec décalage"
-
-          # RESTAURATION RCU : On remet le fichier RCU d'origine pour éliminer le bug de build
-          mv kernel/rcu/update.c.bak kernel/rcu/update.c
-          echo -e "static inline void rcu_tasks_bootup_oddness(void) {}\nstatic inline void show_rcu_tasks_gp_kthreads(void) {}" > kernel/rcu/tasks.h
-
-          # 4. Télécharger et exécuter le script d'Inline Hooks pour lier SUSFS à KernelSU
-          curl -LSs "https://raw.githubusercontent.com/JackA1ltman/NonGKI_Kernel_Build_2nd/mainline/Patches/susfs_inline_hook_patches.sh" -o susfs_inline_hook_patches.sh
-          chmod +x susfs_inline_hook_patches.sh
-          ./susfs_inline_hook_patches.sh $(pwd)/KernelSU || echo "Application des inline hooks terminée"
-
-          # 5. Lier proprement les fichiers de configuration du noyau
+          # 3. Lier proprement les fichiers de configuration système
           DRIVER_MAKEFILE="drivers/Makefile"
           DRIVER_KCONFIG="drivers/Kconfig"
           grep -q "kernelsu" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "$DRIVER_MAKEFILE"
           grep -q "drivers/kernelsu/Kconfig" "$DRIVER_KCONFIG" || sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" "$DRIVER_KCONFIG"
 
-          # Fix SELinux & Bypass de sécurité Kbuild
+          # Injection des drapeaux SELinux indispensables pour KernelSU-Next
           if [ -f "drivers/kernelsu/Makefile" ]; then
             sed -i '1s|^|ccflags-y += -DEXPECT_MANUAL_HOOK=1 -I$(srctree)/security/selinux -I$(srctree)/security/selinux/include -I$(objtree)/security/selinux -I$(objtree)/security/selinux/include\n|' drivers/kernelsu/Makefile
           fi
 
           # =====================================================================
-          # Correctifs spécifiques résiduels de compatibilité de la base Motorola
+          # MÉTHODE RAVINDU : HOOKS SUR MESURE POUR PASSER LE CONTROLE MÉMOIRE MOTO
+          # =====================================================================
+          
+          # Interception de l'initialisation système (fs/read_write.c)
+          sed -i '1s|^|#include <linux/jump_label.h>\nstruct static_key_true ksu_is_init_rc_hook_enabled = STATIC_KEY_TRUE_INIT;\n|' fs/read_write.c
+          
+          # Crochet sécurisé pour l'état des fichiers (fs/stat.c)
+          sed -i '1s|^|#include <linux/types.h>\n#include <linux/fs.h>\n#include <linux/file.h>\n#include <linux/jump_label.h>\nvoid ksu_handle_vfs_fstat(int fd, loff_t *kstat_size_ptr) {\n    struct file *file = fget(fd);\n    if (file) {\n        if (kstat_size_ptr) *kstat_size_ptr = i_size_read(file_inode(file));\n        fput(file);\n    }\n}\n|' fs/stat.c
+          
+          # Crochet pour l'interception des inputs tactiles (drivers/input/input.c)
+          sed -i '1s|^|#include <linux/jump_label.h>\nstruct static_key_true ksu_is_input_hook_enabled = STATIC_KEY_TRUE_INIT;\n|' drivers/input/input.c
+
+          # =====================================================================
+          # Correctifs de compatibilité spécifiques Clang / Motorola
           # =====================================================================
           sed -i '1s|^|typedef unsigned int compat_uptr_t;\n|' include/linux/filter.h
-
-          # Fix E : Configuration du scheduler et stub nohz_flags demandé par le Linker
           sed -i '1s|^|#define NOHZ_KICK_MASK 0x1\nunsigned long nohz_flags(int cpu) { return 0; }\n|' kernel/sched/core.c
 
           if [ -f "drivers/firmware/efi/efi.c" ]; then
             sed -i 's/mmap_sem/mmap_lock/g' drivers/firmware/efi/efi.c
           fi
 
-          # 🎯 FIX CHIRURGICAL LOCKDEP : Signature à 3 arguments injectée tout en haut
-          if [ -f "kernel/locking/lockdep.c" ]; then
-            sed -i '1s|^|void *get_pending_free(void) { return (void *)0; }\nvoid __lockdep_free_key_range(void *p1, void *p2, int p3) {}\nvoid call_rcu_zapped(void *p) {}\n|' kernel/locking/lockdep.c
-            sed -i 's/__lock_release(lock, nested, ip)/__lock_release(lock, 0, ip)/g' kernel/locking/lockdep.c
-          fi
-
-          # 🎯 FIX MOTO DISPLAY : Correction du doublon "static static"
           if [ -f "techpack/display/msm/dsi/dsi_display_mot_ext.c" ]; then
             sed -i 's/static static struct alarm/static struct alarm/g' techpack/display/msm/dsi/dsi_display_mot_ext.c
           fi
 
-          # 🎯 FIX FAULT-INJECT
           if [ -f "lib/fault-inject.c" ]; then
             sed -i 's/if (!WRITE_ONCE(current->fail_nth, fail_nth - 1))/WRITE_ONCE(current->fail_nth, fail_nth - 1); if (current->fail_nth == 0)/g' lib/fault-inject.c
           fi
 
-          # 🎯 FIX ULTIME QUALCOMM IPA : Neutralisation totale de la fonction problématique pour court-circuiter le crash de taille
           if [ -f "drivers/platform/msm/ipa/ipa_v3/ipa_hw_stats.c" ]; then
             sed -i '/ssize_t ipa_debugfs_enable_disable_drop_stats/,/^}/c\ssize_t ipa_debugfs_enable_disable_drop_stats(struct file *file, const char __user *buf, size_t count, loff_t *ppos) { return count; }' drivers/platform/msm/ipa/ipa_v3/ipa_hw_stats.c
           fi
 
-          # 🔄 FIX MACRO SUSFS DANS SUPERCALLS.C
-          if [ -f "drivers/kernelsu/supercalls.c" ]; then
-            sed -i 's/CMD_SUSFS_HIDE_SUS_MNTS_FOR_ALL_PROCS/CMD_SUSFS_HIDE_SUS_MNTS_FOR_NON_SU_PROCS/g' drivers/kernelsu/supercalls.c
-          fi
-
-          # 🧠 INJECTION DE SÉCURITÉ (VFS Hooks fstat fonctionnel)
-          sed -i '1s|^|#include <linux/jump_label.h>\nstruct static_key_true ksu_is_init_rc_hook_enabled = STATIC_KEY_TRUE_INIT;\n|' fs/read_write.c
-          sed -i '1s|^|#include <linux/types.h>\n#include <linux/fs.h>\n#include <linux/file.h>\n#include <linux/jump_label.h>\nvoid ksu_handle_vfs_fstat(int fd, loff_t *kstat_size_ptr) {\n    struct file *file = fget(fd);\n    if (file) {\n        if (kstat_size_ptr) *kstat_size_ptr = i_size_read(file_inode(file));\n        fput(file);\n    }\n}\n|' fs/stat.c
-          sed -i '1s|^|#include <linux/jump_label.h>\nstruct static_key_true ksu_is_input_hook_enabled = STATIC_KEY_TRUE_INIT;\n|' drivers/input/input.c
-
-          # 🧠 COMPLETE STUBS RCU TASKS CORRIGÉS (Signatures sans arguments conformes à linux/rcupdate.h)
-          if [ -f "kernel/rcu/update.c" ]; then
-            echo -e '#include <linux/lockdep.h>\n#include <linux/sched.h>\nstruct lockdep_map rcu_trace_lock_map;\nvoid rcu_read_unlock_trace_special(struct task_struct *t) {}\nvoid exit_tasks_rcu_start(void) {}\nvoid exit_tasks_rcu_finish(void) {}\nvoid synchronize_rcu_tasks(void) {}\nvoid call_rcu_tasks(struct rcu_head *rhp, rcu_callback_t func) {}\nvoid call_rcu_tasks_trace(struct rcu_head *rhp, rcu_callback_t func) {}' >> kernel/rcu/update.c
-          fi
-
-          # 🛑 CONFIGURATION DES STUBS AUTONOMES POUR LNK (Résout les undefined reference)
-          echo -e '#include <linux/types.h>\n#include <linux/fs.h>\n#include <linux/path.h>\nint path_umount(struct path *path, int flags) { return 0; }\nvoid susfs_try_umount(uid_t uid) {}\nvoid susfs_reorder_mnt_id(void) {}\nvoid susfs_run_sus_path_loop(uid_t uid) {}\nvoid susfs_add_try_umount(void *arg) {}\nvoid susfs_set_i_state_on_external_dir(void *arg) {}\nvoid susfs_set_hide_sus_mnts_for_all_procs(bool enable) {}' >> drivers/kernelsu/ksud.c
+          # Neutralisation des stubs SUSFS manquants directement dans le gestionnaire KSUN
+          # Cela évite que le linker plante parce que le patch SUSFS brut n'est pas appliqué à l'aveugle
+          echo -e '#include <linux/types.h>\n#include <linux/fs.h>\nvoid susfs_try_umount(uid_t uid) {}\nvoid susfs_reorder_mnt_id(void) {}\nvoid susfs_run_sus_path_loop(uid_t uid) {}\nvoid susfs_add_try_umount(void *arg) {}\nvoid susfs_set_i_state_on_external_dir(void *arg) {}\nvoid susfs_set_hide_sus_mnts_for_all_procs(bool enable) {}' >> drivers/kernelsu/ksud.c
 
       - name: Préparer la configuration via merge_config
         run: |
@@ -126,8 +98,7 @@ jobs:
           mkdir -p out
           BASE_CONFIG=$(find arch/arm64/configs/ -name "lito-perf_defconfig" -o -name "lito_defconfig" | head -n 1)
           MOTO_CONFIG=$(find arch/arm64/configs/ -name "*kiev*" | head -n 1)
-          echo "Fichier Base détecté : $BASE_CONFIG"
-          echo "Fichier Kiev détecté : $MOTO_CONFIG"
+          
           if [ -n "$BASE_CONFIG" ]; then
             yes "" | ARCH=arm64 ./scripts/kconfig/merge_config.sh -O out/ "$BASE_CONFIG" "$MOTO_CONFIG"
           else
@@ -135,23 +106,15 @@ jobs:
           fi
           yes "" | make O=out ARCH=arm64 olddefconfig
 
-          # Injection des paramètres KernelSU-Next & SUSFS + FIX CONFIGS POUR LINKER
+          # Configuration stricte et optimale pour KernelSU-Next Manuel
           chmod +x scripts/config
           ./scripts/config --file out/.config --enable CONFIG_KSU
           ./scripts/config --file out/.config --enable CONFIG_KALLSYMS
           ./scripts/config --file out/.config --enable CONFIG_KALLSYMS_ALL
-          ./scripts/config --file out/.config --enable CONFIG_CRYPTO
-          ./scripts/config --file out/.config --enable CONFIG_CRYPTO_SHA256
-          ./scripts/config --file out/.config --enable CONFIG_CRYPTO_HASH
-          ./scripts/config --file out/.config --enable CONFIG_CRYPTO_SHASH
-          ./scripts/config --file out/.config --enable CONFIG_CRYPTO_ENGINE
-          ./scripts/config --file out/.config --enable CONFIG_CRYPTO_MANAGER
           ./scripts/config --file out/.config --enable CONFIG_SECCOMP
           ./scripts/config --file out/.config --enable CONFIG_SECCOMP_FILTER
-          ./scripts/config --file out/.config --enable CONFIG_SUSFS
-          ./scripts/config --file out/.config --enable CONFIG_SUSFS_SUS_PATH
-          ./scripts/config --file out/.config --enable CONFIG_SUSFS_SUS_MOUNT
-          ./scripts/config --file out/.config --enable CONFIG_SUSFS_TRY_UMOUNT
+          
+          # Forcer les Hooks Manuels natifs de KSUN (Plus de conflit avec la mémoire du Moto)
           ./scripts/config --file out/.config --disable CONFIG_KSU_TRACEPOINT_HOOK
           ./scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK
           ./scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK
@@ -159,16 +122,13 @@ jobs:
           ./scripts/config --file out/.config --enable CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK
           ./scripts/config --file out/.config --disable CONFIG_FORTIFY_SOURCE
           
-          # ⚙️ RE-CORRECTION DES OPTIONS DE LIEN MANQUANTES (RCU, TRACEPOINTS, ANDROID VENDOR HOOKS)
-          ./scripts/config --file out/.config --enable CONFIG_TASKS_RCU
-          ./scripts/config --file out/.config --enable CONFIG_TASKS_RCU_GENERIC
-          ./scripts/config --file out/.config --enable CONFIG_TASKS_TRACE_RCU
-          ./scripts/config --file out/.config --enable CONFIG_ANDROID_VENDOR_HOOKS
+          # Nettoyage radical des modules de tracking qui causent les Kernel Panic au démarrage
           ./scripts/config --file out/.config --disable CONFIG_PROVE_LOCKING
           ./scripts/config --file out/.config --disable CONFIG_LOCKDEP
+          
           yes "" | make O=out ARCH=arm64 olddefconfig
 
-      - name: Compiler le Kernel (sm8250 unifié / Android 16)
+      - name: Compiler le Kernel
         run: |
           cd kernel-source
           export ARCH=arm64
@@ -183,22 +143,18 @@ jobs:
         run: |
           git clone ${{ env.ANYKERNEL_REPO }} -b ${{ env.ANYKERNEL_BRANCH }} AnyKernel3
           if [ -s kernel-source/out/arch/arm64/boot/Image.gz ]; then
-            echo "-> Image.gz complète trouvée !"
             cp kernel-source/out/arch/arm64/boot/Image.gz AnyKernel3/Image.gz
           elif [ -s kernel-source/out/arch/arm64/boot/Image ]; then
-            echo "-> Image brute complète trouvée !"
             cp kernel-source/out/arch/arm64/boot/Image AnyKernel3/Image
           else
-            echo "ERREUR : L'image finale est introuvable ou vide !"
-            ls -la kernel-source/out/arch/arm64/boot/ || true
             exit 1
           fi
           cd AnyKernel3
           sed -i 's/device.name1=maguro/device.name1=kiev/g' anykernel.sh
-          zip -r ../ReSukiSU-Kernel-Kiev.zip *
+          zip -r ../ReSukiSU-Kernel-Kiev-KSUNext.zip *
 
-      - name: Téléverser le ZIP final sur GitHub
+      - name: Téléverser l'artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ReSukiSU-Kernel-Kiev-AnyKernel3
-          path: ReSukiSU-Kernel-Kiev.zip
+          name: ReSukiSU-Kernel-Kiev-KSUNext
+          path: ReSukiSU-Kernel-Kiev-KSUNext.zip
