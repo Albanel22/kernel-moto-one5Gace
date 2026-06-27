@@ -87,6 +87,11 @@ jobs:
             sed -i 's/trace_android_vh_check_file_open/\/\/ trace_android_vh_check_file_open/g' fs/open.c
           fi
 
+          # Désactivation du point de trace Vendor Hook fantôme dans mm/util.c
+          if [ -f "mm/util.c" ]; then
+            sed -i 's/trace_android_vh_check_mmap_file/\/\/ trace_android_vh_check_mmap_file/g' mm/util.c
+          fi
+
           # Injection des variables et flags directement au sommet de KernelSU-Next
           for f in drivers/kernelsu/Makefile drivers/kernelsu/Kbuild; do
             if [ -f "$f" ]; then
