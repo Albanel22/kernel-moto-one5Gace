@@ -1,4 +1,4 @@
-name: Build Kernel ReSukiSU/KSUN - Moto Kiev (Ravindu Clean V6)
+name: Build Kernel ReSukiSU/KSUN - Moto Kiev (Ravindu Clean V7)
 on:
   workflow_dispatch:
 
@@ -40,12 +40,13 @@ jobs:
           # 2. Créer le lien symbolique interne requis
           ln -sf $(pwd)/KernelSU/kernel drivers/kernelsu
 
-          # 3. Liaison Kconfig/Makefile sécurisée (sans risques de sous-menus)
+          # 3. Liaison Kconfig/Makefile au sommet du bloc des pilotes
           DRIVER_MAKEFILE="drivers/Makefile"
-          DRIVER_KCONFIG="drivers/Kconfig"
           
           grep -q "kernelsu" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_KSU) += kernelsu/\n" >> "$DRIVER_MAKEFILE"
-          grep -q "drivers/kernelsu/Kconfig" "$DRIVER_KCONFIG" || echo 'source "drivers/kernelsu/Kconfig"' >> "$DRIVER_KCONFIG"
+          
+          # Injection juste sous l'ouverture du menu principal pour garantir la lecture des options
+          sed -i '/menu "Device Drivers"/a source "drivers/kernelsu/Kconfig"' drivers/Kconfig
 
           # Injection des drapeaux SELinux indispensables pour KernelSU-Next
           if [ -f "drivers/kernelsu/Makefile" ]; then
