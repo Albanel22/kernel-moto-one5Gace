@@ -4,7 +4,6 @@ on:
   workflow_dispatch: # Permet de lancer la compilation manuellement depuis l'onglet Actions
 
 env:
-  # Modifie ces variables si tu as besoin de basculer entre sm8250 ou sm7250 selon tes sources exactes
   KERNEL_REPO: https://github.com/LineageOS/android_kernel_motorola_sm8250
   KERNEL_BRANCH: lineage-23.2
   KERNEL_DEFCONFIG: vendor/kiev_defconfig
@@ -20,10 +19,10 @@ jobs:
       - name: Configuration de l'espace de travail
         uses: actions/checkout@v4
 
-      - name: Installer les dépendances Linux requis
+      - name: Installer les dépendances Linux requises
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libncurses5-dev libsdl1.1-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3
+          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3
 
       - name: Télécharger le Toolchain (Proton Clang)
         run: |
