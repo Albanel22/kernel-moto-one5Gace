@@ -56,16 +56,23 @@ jobs:
           fi
 
           # =====================================================================
-          # CORRECTIFS LIENS ET LINKER (Bypass complet des dépendances umount)
+          # CORRECTIFS LIENS ET LINKER (Surgical Patch)
           # =====================================================================
-          # Injection de tous les stubs requis pour l'arborescence de umount (évite les undefined references)
+          # Au lieu d'écraser le fichier, on neutralise UNIQUEMENT les appels de démontage impossibles
           python3 -c "
-          import os
+          import os, re
           fp = 'drivers/kernelsu/feature/kernel_umount.c'
           if os.path.exists(fp):
+              with open(fp, 'r') as f:
+                  content = f.read()
+              
+              # Remplace les appels à path_umount(...) ou do_umount(...) par 0 (Inoffensif pour le système)
+              content = re.sub(r'path_umount\([^)]*\)', '0', content)
+              content = re.sub(r'do_umount\([^)]*\)', '0', content)
+              
               with open(fp, 'w') as f:
-                  f.write('#include <linux/fs.h>\n#include <linux/path.h>\n\nint ksu_umount_mnt(struct path *path, int flags) {\n    return 0;\n}\n\nint ksu_kernel_umount_init(void) {\n    return 0;\n}\n\nvoid ksu_kernel_umount_exit(void) {\n    return;\n}\n')
-              print('Successfully injected complete Stubs (init/mnt/exit) into kernel_umount.c!')
+                  f.write(content)
+              print('Successfully patched kernel_umount.c without breaking other functions!')
           "
 
           # Désactivation du point de trace Vendor Hook fantôme dans fs/open.c
