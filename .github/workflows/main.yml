@@ -1,4 +1,4 @@
-name: Build Kernel ReSukiSU/KSUN - Moto Kiev (Ravindu Legacy V13)
+name: Build Kernel ReSukiSU/KSUN - Moto Kiev (Ravindu Legacy V14)
 on:
   workflow_dispatch:
 
@@ -92,10 +92,18 @@ jobs:
             sed -i 's/trace_android_vh_check_mmap_file/\/\/ trace_android_vh_check_mmap_file/g' mm/util.c
           fi
 
-          # NOUVEAU : Désactivation des points de trace Vendor Hook fantômes dans kernel/bpf/bpf_struct_ops.c
+          # Désactivation totale des appels de hooks mémoire dans le sous-système réseau BPF
           if [ -f "kernel/bpf/bpf_struct_ops.c" ]; then
             sed -i 's/trace_android_vh_set_memory_rw/\/\/ trace_android_vh_set_memory_rw/g' kernel/bpf/bpf_struct_ops.c
             sed -i 's/trace_android_vh_set_memory_nx/\/\/ trace_android_vh_set_memory_nx/g' kernel/bpf/bpf_struct_ops.c
+            sed -i 's/trace_android_vh_set_memory_ro/\/\/ trace_android_vh_set_memory_ro/g' kernel/bpf/bpf_struct_ops.c
+            sed -i 's/trace_android_vh_set_memory_x/\/\/ trace_android_vh_set_memory_x/g' kernel/bpf/bpf_struct_ops.c
+          fi
+
+          # NETTOYAGE RADICAL : Neutralisation des déclarations de hooks mémoire problématiques
+          if [ -f "include/trace/hooks/memory.h" ]; then
+            sed -i 's/DECLARE_HOOK/\/\/ DECLARE_HOOK/g' include/trace/hooks/memory.h
+            sed -i 's/DECLARE_RESTRICTED_HOOK/\/\/ DECLARE_RESTRICTED_HOOK/g' include/trace/hooks/memory.h
           fi
 
           # Injection des variables et flags directement au sommet de KernelSU-Next
