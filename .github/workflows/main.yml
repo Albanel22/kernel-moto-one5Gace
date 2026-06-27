@@ -100,10 +100,12 @@ jobs:
             sed -i 's/trace_android_vh_set_memory_x/\/\/ trace_android_vh_set_memory_x/g' kernel/bpf/bpf_struct_ops.c
           fi
 
-          # NETTOYAGE RADICAL : Neutralisation des déclarations de hooks mémoire problématiques
+          # =====================================================================
+          # RECTIFICATION ICI : Vidage complet du fichier pour éviter les macros orphelines
+          # =====================================================================
           if [ -f "include/trace/hooks/memory.h" ]; then
-            sed -i 's/DECLARE_HOOK/\/\/ DECLARE_HOOK/g' include/trace/hooks/memory.h
-            sed -i 's/DECLARE_RESTRICTED_HOOK/\/\/ DECLARE_RESTRICTED_HOOK/g' include/trace/hooks/memory.h
+            echo "--> Vidage complet de include/trace/hooks/memory.h"
+            echo "" > include/trace/hooks/memory.h
           fi
 
           # Injection des variables et flags directement au sommet de KernelSU-Next
