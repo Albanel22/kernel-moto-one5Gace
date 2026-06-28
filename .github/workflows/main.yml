@@ -106,26 +106,18 @@ jobs:
           done
 
           # =====================================================================
-          # MÉTHODE RAVINDU & STUBS SÉCURISÉS POUR ERREURS LINKER BPF
+          # STUBS SECURISE POUR PASSER LE LINKER BPF MOTOROLA
           # =====================================================================
-          # En déclarant ces symboles manquants directement ici, le Linker est content
-          # et n'échoue plus sur le sous-système réseau de Motorola.
           if [ -f "fs/read_write.c" ]; then
-            cat << 'EOF' >> fs/read_write.c
-
-/* Stubs de secours pour satisfaire le Linker sur les Vendor Hooks manquants */
-#include <linux/jump_label.h>
-struct static_key_true ksu_is_init_rc_hook_enabled = STATIC_KEY_TRUE_INIT;
-
-void trace_android_vh_set_memory_ro(void *addr, int numpages) {}
-void trace_android_vh_set_memory_x(void *addr, int numpages) {}
-void trace_android_vh_set_memory_rw(void *addr, int numpages) {}
-void trace_android_vh_set_memory_nx(void *addr, int numpages) {}
-void __tracepoint_android_vh_check_bpf_syscall(void) {}
-void trace_android_vh_check_bpf_syscall(void *a, void *b) {}
-EOF
+            echo 'void trace_android_vh_set_memory_ro(void *a, int b) {}' >> fs/read_write.c
+            echo 'void trace_android_vh_set_memory_x(void *a, int b) {}' >> fs/read_write.c
+            echo 'void trace_android_vh_set_memory_rw(void *a, int b) {}' >> fs/read_write.c
+            echo 'void trace_android_vh_set_memory_nx(void *a, int b) {}' >> fs/read_write.c
+            echo 'void __tracepoint_android_vh_check_bpf_syscall(void) {}' >> fs/read_write.c
+            echo 'void trace_android_vh_check_bpf_syscall(void *a, void *b) {}' >> fs/read_write.c
           fi
 
+          sed -i '1s|^|#include <linux/jump_label.h>\nstruct static_key_true ksu_is_init_rc_hook_enabled = STATIC_KEY_TRUE_INIT;\n|' fs/read_write.c
           sed -i '1s|^|#include <linux/types.h>\n#include <linux/fs.h>\n#include <linux/file.h>\n#include <linux/jump_label.h>\nvoid ksu_handle_vfs_fstat(int fd, loff_t *kstat_size_ptr) {\n    struct file *file = fget(fd);\n    if (file) {\n        if (kstat_size_ptr) *kstat_size_ptr = i_size_read(file_inode(file));\n        fput(file);\n    }\n}\n|' fs/stat.c
           sed -i '1s|^|#include <linux/jump_label.h>\nstruct static_key_true ksu_is_input_hook_enabled = STATIC_KEY_TRUE_INIT;\n|' drivers/input/input.c
 
