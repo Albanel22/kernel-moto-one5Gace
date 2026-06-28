@@ -92,17 +92,7 @@ jobs:
             sed -i 's/trace_android_vh_check_mmap_file/\/\/ trace_android_vh_check_mmap_file/g' mm/util.c
           fi
 
-          # Désactivation totale des appels de hooks mémoire dans le sous-système réseau BPF
-          if [ -f "kernel/bpf/bpf_struct_ops.c" ]; then
-            sed -i 's/trace_android_vh_set_memory_rw/\/\/ trace_android_vh_set_memory_rw/g' kernel/bpf/bpf_struct_ops.c
-            sed -i 's/trace_android_vh_set_memory_nx/\/\/ trace_android_vh_set_memory_nx/g' kernel/bpf/bpf_struct_ops.c
-            sed -i 's/trace_android_vh_set_memory_ro/\/\/ trace_android_vh_set_memory_ro/g' kernel/bpf/bpf_struct_ops.c
-            sed -i 's/trace_android_vh_set_memory_x/\/\/ trace_android_vh_set_memory_x/g' kernel/bpf/bpf_struct_ops.c
-          fi
-
-          # =====================================================================
-          # RECTIFICATION ICI : Vidage complet du fichier pour éviter les macros orphelines
-          # =====================================================================
+          # Vidage complet du fichier pour éviter les conflits de macros orphelines
           if [ -f "include/trace/hooks/memory.h" ]; then
             echo "--> Vidage complet de include/trace/hooks/memory.h"
             echo "" > include/trace/hooks/memory.h
@@ -116,9 +106,26 @@ jobs:
           done
 
           # =====================================================================
-          # MÉTHODE RAVINDU : HOOKS SUR MESURE POUR PASSER LE CONTROLE MÉMOIRE MOTO
+          # MÉTHODE RAVINDU & STUBS SÉCURISÉS POUR ERREURS LINKER BPF
           # =====================================================================
-          sed -i '1s|^|#include <linux/jump_label.h>\nstruct static_key_true ksu_is_init_rc_hook_enabled = STATIC_KEY_TRUE_INIT;\n|' fs/read_write.c
+          # En déclarant ces symboles manquants directement ici, le Linker est content
+          # et n'échoue plus sur le sous-système réseau de Motorola.
+          if [ -f "fs/read_write.c" ]; then
+            cat << 'EOF' >> fs/read_write.c
+
+/* Stubs de secours pour satisfaire le Linker sur les Vendor Hooks manquants */
+#include <linux/jump_label.h>
+struct static_key_true ksu_is_init_rc_hook_enabled = STATIC_KEY_TRUE_INIT;
+
+void trace_android_vh_set_memory_ro(void *addr, int numpages) {}
+void trace_android_vh_set_memory_x(void *addr, int numpages) {}
+void trace_android_vh_set_memory_rw(void *addr, int numpages) {}
+void trace_android_vh_set_memory_nx(void *addr, int numpages) {}
+void __tracepoint_android_vh_check_bpf_syscall(void) {}
+void trace_android_vh_check_bpf_syscall(void *a, void *b) {}
+EOF
+          fi
+
           sed -i '1s|^|#include <linux/types.h>\n#include <linux/fs.h>\n#include <linux/file.h>\n#include <linux/jump_label.h>\nvoid ksu_handle_vfs_fstat(int fd, loff_t *kstat_size_ptr) {\n    struct file *file = fget(fd);\n    if (file) {\n        if (kstat_size_ptr) *kstat_size_ptr = i_size_read(file_inode(file));\n        fput(file);\n    }\n}\n|' fs/stat.c
           sed -i '1s|^|#include <linux/jump_label.h>\nstruct static_key_true ksu_is_input_hook_enabled = STATIC_KEY_TRUE_INIT;\n|' drivers/input/input.c
 
