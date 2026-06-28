@@ -1,4 +1,4 @@
-name: Build Kernel ReSukiSU/KSUN - Moto Kiev (Ravindu Legacy V14)
+name: Build Kernel ReSukiSU/KSUN - Moto Kiev (Ravindu Legacy V15)
 on:
   workflow_dispatch:
 
@@ -66,12 +66,10 @@ jobs:
                   lines = f.readlines()
               
               new_lines = []
-              # Injecter les surcharges de macros sécurisées au tout début du fichier
               new_lines.append('#define path_umount(...) 0\n')
               new_lines.append('#define do_umount(...) 0\n')
               
               for line in lines:
-                  # Commenter les prototypes de fonctions extern pour éviter 'extern int 0;'
                   if 'extern int path_umount' in line or 'extern int do_umount' in line:
                       new_lines.append('// ' + line)
                   else:
@@ -94,7 +92,6 @@ jobs:
 
           # Vidage complet du fichier pour éviter les conflits de macros orphelines
           if [ -f "include/trace/hooks/memory.h" ]; then
-            echo "--> Vidage complet de include/trace/hooks/memory.h"
             echo "" > include/trace/hooks/memory.h
           fi
 
@@ -153,7 +150,6 @@ jobs:
       - name: Préparer la configuration via merge_config
         run: |
           cd kernel-source
-          
           export ARCH=arm64
           export SUBARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
@@ -186,7 +182,6 @@ jobs:
           
           make O=out ARCH=arm64 olddefconfig
 
-          # Injection forcée finale post-nettoyage dans les fichiers système réels
           echo "CONFIG_KSU_MANUAL_HOOK=y" >> out/.config
           echo "CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK=y" >> out/.config
           echo "CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK=y" >> out/.config
@@ -199,7 +194,7 @@ jobs:
             echo "CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK=y" >> out/include/config/auto.conf
           fi
 
-      - name: Compiler le Kernel
+      - name: Compiler le Kernel et ses Modules
         run: |
           cd kernel-source
           export ARCH=arm64
@@ -208,20 +203,31 @@ jobs:
           export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
           export CLANG_TRIPLE=aarch64-linux-gnu-
           export CC=clang
-          make -j$(nproc --all) O=out KCFLAGS="-w -Wno-error" Image.gz
+          # Modification majeure : On compile le noyau ET les modules externes requis
+          make -j$(nproc --all) O=out KCFLAGS="-w -Wno-error" Image.gz modules
 
-      - name: Empaqueter avec AnyKernel3
+      - name: Empaqueter avec AnyKernel3 et injecter les modules
         run: |
           git clone ${{ env.ANYKERNEL_REPO }} -b ${{ env.ANYKERNEL_BRANCH }} AnyKernel3
+          
+          # 1. Copier l'image du Kernel
           if [ -s kernel-source/out/arch/arm64/boot/Image.gz ]; then
             cp kernel-source/out/arch/arm64/boot/Image.gz AnyKernel3/Image.gz
-          elif [ -s kernel-source/out/arch/arm64/boot/Image ]; then
-            cp kernel-source/out/arch/arm64/boot/Image AnyKernel3/Image
           else
-            exit 1
+            cp kernel-source/out/arch/arm64/boot/Image AnyKernel3/Image
           fi
+          
+          # 2. Extraire et organiser les nouveaux modules (.ko) pour AnyKernel3
+          mkdir -p AnyKernel3/modules/vendor/lib/modules
+          find kernel-source/out/ -name "*.ko" -exec cp {} AnyKernel3/modules/vendor/lib/modules/ \;
+          
+          # 3. Configurer correctement la partition cible et l'installation de modules
           cd AnyKernel3
           sed -i 's/device.name1=maguro/device.name1=kiev/g' anykernel.sh
+          sed -i 's/block=\/dev\/block\/platform\/omap\/omap_hsmmc.0\/by-name\/boot;/block=\/dev\/block\/by-name\/boot;/g' anykernel.sh
+          sed -i 's/is_slot_device=0;/is_slot_device=1;/g' anykernel.sh
+          
+          # Créer l'archive zip finale avec la bonne arborescence racine
           zip -r ../ReSukiSU-Kernel-Kiev-KSUNext.zip *
 
       - name: Téléverser l'artifact
