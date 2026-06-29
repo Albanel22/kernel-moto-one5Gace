@@ -11,7 +11,13 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 360
     steps:
+      - name: Configure Git
+        run: |
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
+
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
@@ -23,6 +29,11 @@ jobs:
           cd clang
           git sparse-checkout set clang-r522817
           echo "$(pwd)/clang-r522817/bin" >> $GITHUB_PATH
+
+      - name: Verify Clang Installation
+        run: |
+          which clang || { echo "Clang not found in PATH"; exit 1; }
+          clang --version
 
       - name: Clone Kernel Source
         run: |
@@ -45,7 +56,7 @@ jobs:
           
           mkdir -p out
           
-          # Trouver le defconfig Kiev
+          # Find the Kiev defconfig
           DEFCONFIG="arch/arm64/configs/lito_defconfig"
           
           if [ -f "$DEFCONFIG" ]; then
@@ -54,8 +65,9 @@ jobs:
             make O=out defconfig
           fi
           
-          # Ajouter les configs KernelSU
+          # Add KernelSU configs
           cat >> out/.config <<'EOF'
+          
           CONFIG_KSU=y
           CONFIG_KALLSYMS=y
           CONFIG_KALLSYMS_ALL=y
@@ -74,6 +86,13 @@ jobs:
           export CC=clang
           
           make -j$(nproc --all) O=out Image.gz modules 2>&1 | tee build.log
+
+      - name: Check Build Output
+        if: always()
+        run: |
+          cd kernel-source
+          ls -lah out/arch/arm64/boot/ || echo "Build output not found"
+          [ -f out/arch/arm64/boot/Image.gz ] || { echo "Image.gz not found"; exit 1; }
 
       - name: Package with AnyKernel3
         run: |
@@ -94,3 +113,12 @@ jobs:
         with:
           name: KernelSU-Kiev
           path: KernelSU-Kiev.zip
+          retention-days: 30
+
+      - name: Upload Build Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: kernel-source/build.log
+          retention-days: 7
