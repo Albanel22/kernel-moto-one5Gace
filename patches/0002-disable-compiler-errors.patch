@@ -1,0 +1,22 @@
+--- a/scripts/dtc/Makefile
++++ b/scripts/dtc/Makefile
+@@ -1,7 +1,7 @@
+ # scripts/dtc/Makefile
+ 
+ hostprogs-y := dtc
+-HOSTCFLAGS += -I$(src) -I$(src)/libfdt
++HOSTCFLAGS += -I$(src) -I$(src)/libfdt -Wno-error=incompatible-pointer-types
+ 
+ dtc-objs := dtc.o flattree.o fstree.o data.o livetree.o treesource.o \
+ 	srcpos.o checks.o util.o
+--- a/Makefile
++++ b/Makefile
+@@ -603,7 +603,7 @@ KBUILD_CFLAGS   += $(call cc-disable-warning, unused-but-set-variable)
+ KBUILD_CFLAGS   += $(call cc-disable-warning, unused-const-variable)
+ KBUILD_CFLAGS   += -fno-stack-protector
+ 
+-KBUILD_CFLAGS   += $(call cc-option,-Werror=strict-prototypes) \
++KBUILD_CFLAGS   += $(call cc-option,-Wno-error=strict-prototypes) \
+ 		   $(call cc-option,-Wno-trigraphs)
+ 
+ # Warnings for C files
