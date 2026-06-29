@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
 
 env:
-  KERNEL_REPO: https://github.com/LineageOS/android_kernel_motorola_sm6150
+  KERNEL_REPO: https://github.com/LineageOS/android_kernel_motorola_sm8250
   KERNEL_BRANCH: lineage-23.2
   ANYKERNEL_REPO: https://github.com/osm0sis/AnyKernel3.git
   ANYKERNEL_BRANCH: master
