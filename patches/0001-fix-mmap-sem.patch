@@ -1,0 +1,26 @@
+--- a/include/linux/huge_mm.h
++++ b/include/linux/huge_mm.h
+@@ -194,7 +194,11 @@ pmd_trans_huge_lock(pmd_t *pmdp, struct vm_area_struct *vma)
+ {
+ 	spinlock_t *ptl;
+-	VM_BUG_ON_VMA(!rwsem_is_locked(&vma->vm_mm->mmap_sem), vma);
++	#ifdef CONFIG_HAVE_MMAP_LOCK
++	VM_BUG_ON_VMA(!rwsem_is_locked(&vma->vm_mm->mmap_lock), vma);
++	#else
++	VM_BUG_ON_VMA(!rwsem_is_locked(&vma->vm_mm->mmap_sem), vma);
++	#endif
+ 	ptl = pmd_lock(vma, pmdp);
+ 	if (likely(pmd_trans_huge(*pmdp)))
+ 		return ptl;
+@@ -203,7 +207,11 @@ pud_trans_huge_lock(pud_t *pudp, struct vm_area_struct *vma)
+ {
+ 	spinlock_t *ptl;
+-	VM_BUG_ON_VMA(!rwsem_is_locked(&vma->vm_mm->mmap_sem), vma);
++	#ifdef CONFIG_HAVE_MMAP_LOCK
++	VM_BUG_ON_VMA(!rwsem_is_locked(&vma->vm_mm->mmap_lock), vma);
++	#else
++	VM_BUG_ON_VMA(!rwsem_is_locked(&vma->vm_mm->mmap_sem), vma);
++	#endif
+ 	ptl = pud_lock(vma, pudp);
+ 	if (likely(pud_trans_huge(*pudp)))
+ 		return ptl;
