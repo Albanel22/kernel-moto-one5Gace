@@ -1,4 +1,4 @@
-name: Build Kernel ReSukiSU/KernelSU - Moto Kiev
+name: Build Kernel ReSukiSU - Moto Kiev
 on:
   workflow_dispatch:
 
@@ -11,90 +11,26 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
     steps:
-      - name: Configure Git
-        run: |
-          git config --global user.email "action@github.com"
-          git config --global user.name "GitHub Action"
-
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y bc bison build-essential ccache curl flex gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev binutils-aarch64-linux-gnu gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
 
-      - name: Download AOSP Clang Toolchain
+      - name: Download Toolchain
         run: |
-          git clone --depth=1 --filter=blob:none --sparse https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 clang
-          cd clang
-          git sparse-checkout set clang-r522817
-          echo "$(pwd)/clang-r522817/bin" >> $GITHUB_PATH
-
-      - name: Verify Clang Installation
-        run: |
-          which clang || { echo "Clang not found in PATH"; exit 1; }
-          clang --version
+          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86 -b lineage-23 clang
+          echo "$(pwd)/clang/bin" >> $GITHUB_PATH
 
       - name: Clone Kernel Source
-        run: |
-          git clone ${{ env.KERNEL_REPO }} -b ${{ env.KERNEL_BRANCH }} --depth=1 kernel-source
+        run: git clone ${{ env.KERNEL_REPO }} -b ${{ env.KERNEL_BRANCH }} --depth=1 kernel-source
 
-      - name: Apply KernelSU Patch
-        run: |
-          cd kernel-source
-          git clone https://github.com/tiann/KernelSU.git -b main KernelSU
-          ln -sf $(pwd)/KernelSU/kernel drivers/kernelsu
-          grep -q "kernelsu" drivers/Makefile || echo "obj-\$(CONFIG_KSU) += kernelsu/" >> drivers/Makefile
-          grep -q "drivers/kernelsu/Kconfig" Kconfig || echo 'source "drivers/kernelsu/Kconfig"' >> Kconfig
-
-      - name: Fix Kernel Header Compatibility Issues
+      - name: Apply KernelSU
         run: |
           cd kernel-source
-          # Fix mmap_sem -> mmap_lock compatibility for newer kernel headers
-          echo "Applying kernel header compatibility patches..."
-          
-          # Fix huge_mm.h mmap_sem references
-          if grep -r "mmap_sem" include/linux/huge_mm.h 2>/dev/null; then
-            sed -i 's/&vma->vm_mm->mmap_sem/\&vma->vm_mm->mmap_lock/g' include/linux/huge_mm.h || true
-          fi
-          
-          # Fix mmu_notifier.h enum issues by disabling problematic checks
-          if grep -r "VM_BUG_ON_VMA" include/linux/huge_mm.h 2>/dev/null; then
-            sed -i 's/VM_BUG_ON_VMA(!rwsem_is_locked(&vma->vm_mm->mmap_lock.*/\/\/ DISABLED VM_BUG_ON_VMA for compatibility/g' include/linux/huge_mm.h || true
-          fi
-
-      - name: Prepare Kernel Config
-        run: |
-          cd kernel-source
-          export ARCH=arm64
-          export CROSS_COMPILE=aarch64-linux-gnu-
-          export CC=clang
-          
-          mkdir -p out
-          
-          # Find the Kiev defconfig
-          DEFCONFIG="arch/arm64/configs/lito_defconfig"
-          
-          if [ -f "$DEFCONFIG" ]; then
-            cp "$DEFCONFIG" out/.config
-          else
-            make O=out defconfig
-          fi
-          
-          # Add KernelSU configs and compatibility settings
-          cat >> out/.config <<'EOF'
-
-          CONFIG_KSU=y
-          CONFIG_KALLSYMS=y
-          CONFIG_KALLSYMS_ALL=y
-          CONFIG_SECCOMP=y
-          CONFIG_SECCOMP_FILTER=y
-          CONFIG_JUMP_LABEL=y
-          CONFIG_WERROR=n
-          CONFIG_COMPILE_TEST=n
-          EOF
-          
-          make O=out olddefconfig
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
+          # Verification du patch
+          grep -q "CONFIG_KSU=y" arch/arm64/configs/lito_defconfig || echo "CONFIG_KSU=y" >> arch/arm64/configs/lito_defconfig
 
       - name: Build Kernel
         run: |
@@ -102,43 +38,28 @@ jobs:
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           export CC=clang
-          export KBUILD_BUILD_TIMESTAMP=''
-          
-          # Build with relaxed error handling
-          make -j$(nproc --all) O=out Image.gz modules W=0 2>&1 | tee build.log
-
-      - name: Check Build Output
-        if: always()
-        run: |
-          cd kernel-source
-          ls -lah out/arch/arm64/boot/ || echo "Build output not found"
-          [ -f out/arch/arm64/boot/Image.gz ] || { echo "Image.gz not found"; exit 1; }
+          mkdir -p out
+          make O=out lito_defconfig
+          make -j$(nproc --all) O=out Image.gz dtbo.img dtbs 2>&1 | tee build.log
 
       - name: Package with AnyKernel3
         run: |
           git clone ${{ env.ANYKERNEL_REPO }} -b ${{ env.ANYKERNEL_BRANCH }} AnyKernel3
-          
+          # Copie de l'image
           cp kernel-source/out/arch/arm64/boot/Image.gz AnyKernel3/
-          mkdir -p AnyKernel3/modules/vendor/lib/modules
-          find kernel-source/out -name "*.ko" -exec cp {} AnyKernel3/modules/vendor/lib/modules/ \;
+          # Copie des fichiers DTB (Crucial pour la batterie/tactile)
+          cp kernel-source/out/arch/arm64/boot/dtb.img AnyKernel3/
+          cp kernel-source/out/arch/arm64/boot/dtbo.img AnyKernel3/
           
           cd AnyKernel3
+          # Configuration AnyKernel
           sed -i 's/device.name1=.*/device.name1=kiev/g' anykernel.sh
           sed -i 's/is_slot_device=.*/is_slot_device=1/g' anykernel.sh
           
-          zip -r ../KernelSU-Kiev.zip * -x "*.git*"
+          zip -r ../KernelSU-Kiev.zip * -x ".git*"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: KernelSU-Kiev
           path: KernelSU-Kiev.zip
-          retention-days: 30
-
-      - name: Upload Build Log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log
-          path: kernel-source/build.log
-          retention-days: 7
