@@ -19,8 +19,9 @@ jobs:
 
       - name: Download Toolchain
         run: |
-          # Utilisation de l'URL brute avec accès public explicite
-          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86.git -b lineage-23 clang
+          mkdir -p clang
+          curl -LO https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86/archive/refs/heads/lineage-23.tar.gz
+          tar -xzf lineage-23.tar.gz -C clang --strip-components=1
           echo "$(pwd)/clang/bin" >> $GITHUB_PATH
 
       - name: Clone Kernel Source
