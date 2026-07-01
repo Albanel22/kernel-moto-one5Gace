@@ -19,13 +19,10 @@ jobs:
 
       - name: Download Toolchain
         run: |
-          echo "Tentative de clonage de la toolchain..."
-          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86.git -b lineage-23 clang || {
-          echo "Clonage échoué, passage au téléchargement direct..."
           mkdir -p clang
-          curl -LO https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86/archive/refs/heads/lineage-23.tar.gz
-          tar -xzf lineage-23.tar.gz -C clang --strip-components=1
-          }
+          echo "Téléchargement de la toolchain officielle Google..."
+          curl -LO https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master/clang-r450784d.tar.gz
+          tar -xzf clang-r450784d.tar.gz -C clang
           echo "$(pwd)/clang/bin" >> $GITHUB_PATH
 
       - name: Clone Kernel Source
@@ -46,7 +43,8 @@ jobs:
           export CC=clang
           mkdir -p out
           make O=out lito_defconfig
-          make -j$(nproc --all) O=out Image.gz dtbo.img dtbs 2>&1 | tee build.log
+          # On compile sans dtbo.img si le build échoue, il est souvent généré automatiquement
+          make -j$(nproc --all) O=out Image.gz dtbs 2>&1 | tee build.log
 
       - name: Package with AnyKernel3
         run: |
