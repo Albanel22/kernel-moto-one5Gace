@@ -13,34 +13,48 @@ jobs:
 
       - name: Build Process
         run: |
+          # 1. Installation des outils
           sudo apt-get update && sudo apt-get install -y bc bison build-essential curl flex g++-aarch64-linux-gnu gcc-aarch64-linux-gnu git libssl-dev clang lld llvm zip
+          
+          # 2. Télécharger les sources LineageOS 23.2
           git clone https://github.com/LineageOS/android_kernel_motorola_sm8250 --depth=1 -b lineage-23.2 source
           cd source
+          
+          # 3. Intégration ReSukiSU
           git clone https://github.com/ReSukiSU/ReSukiSU KSU
           cp -r KSU/kernel drivers/kernelsu
+          
+          # 4. Intégration SUSFS (Chemin dynamique)
           git clone https://gitlab.com/simonpunk/susfs4ksu susfs
-          cp -r susfs/kernel/fs/* fs/ || cp -r susfs/fs/* fs/
-          cp -r susfs/kernel/include/linux/* include/linux/ || cp -r susfs/include/linux/* include/linux/
+          cp -r $(find susfs -type d -name "fs" | head -n 1)/* fs/
+          cp -r $(find susfs -type d -name "linux" | grep "include" | head -n 1)/* include/linux/
+          
+          # 5. Appliquer les modifications automatiques
           echo "obj-\$(CONFIG_KSU) += kernelsu/" >> drivers/Makefile
           sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" drivers/Kconfig
           sed -i 's/static DEFINE_RWLOCK(policy_rwlock);/DEFINE_RWLOCK(policy_rwlock);/g' security/selinux/ss/services.c
           sed -i 's/static DEFINE_MUTEX(sel_mutex);/DEFINE_MUTEX(sel_mutex);/g' security/selinux/selinuxfs.c
+          
+          # 6. Compilation
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           export CC=clang
           export CLANG_TRIPLE=aarch64-linux-gnu-
+          
           make O=out ARCH=arm64 vendor/kiev_defconfig
           echo "CONFIG_KSU=y" >> out/.config
           echo "CONFIG_KSU_MANUAL_HOOK=y" >> out/.config
           echo "CONFIG_KSU_SUSFS=y" >> out/.config
           make O=out ARCH=arm64 -j$(nproc)
+          
+          # 7. Emballage AnyKernel3
           git clone https://github.com/osm0sis/AnyKernel3 --depth=1 ../AnyKernel3
           cp out/arch/arm64/boot/Image.gz-dtb ../AnyKernel3/
           cd ../AnyKernel3
           sed -i 's/block=.*/block=auto;/g' anykernel.sh
           zip -r9 ../AnyKernel3-kiev-lineage23.2.zip *
-
-      - name: Upload
+          
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: AnyKernel3-Flashable
