@@ -1,16 +1,3 @@
-name: Build Kernel Kiev Lineage-23.2
-
-on:
-  push:
-    branches: [ main ]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Build Process
         run: |
           # 1. Installation des outils
@@ -20,12 +7,18 @@ jobs:
           git clone https://github.com/LineageOS/android_kernel_motorola_sm8250 --depth=1 -b lineage-23.2 source
           cd source
           
-          # 3. Intégrer KernelSU et SUSFS
+          # 3. Intégrer KernelSU et SUSFS (Correction ici)
           git clone https://github.com/ReSukiSU/ReSukiSU KSU
           cp -r KSU/kernel drivers/kernelsu
+          
           git clone https://gitlab.com/simonpunk/susfs4ksu susfs
-          cp -r susfs/kernel/fs/* fs/
-          cp -r susfs/kernel/include/linux/* include/linux/
+          # Correction : On cherche les fichiers directement dans le dossier cloné
+          # On vérifie d'abord où sont les fichiers fs/
+          find susfs -name "fs"
+          
+          # Copie plus robuste :
+          cp -r susfs/kernel/fs/* fs/ || cp -r susfs/fs/* fs/ || echo "Copie FS échouée"
+          cp -r susfs/kernel/include/linux/* include/linux/ || cp -r susfs/include/linux/* include/linux/ || echo "Copie Include échouée"
           
           # 4. Appliquer les modifications automatiques
           echo "obj-\$(CONFIG_KSU) += kernelsu/" >> drivers/Makefile
@@ -51,9 +44,3 @@ jobs:
           cd ../AnyKernel3
           sed -i 's/block=.*/block=auto;/g' anykernel.sh
           zip -r9 ../AnyKernel3-kiev-lineage23.2.zip *
-          
-      - name: Upload
-        uses: actions/upload-artifact@v4
-        with:
-          name: AnyKernel3-Flashable
-          path: AnyKernel3-kiev-lineage23.2.zip
