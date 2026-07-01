@@ -41,15 +41,19 @@ jobs:
           export CC=clang
           export CLANG_TRIPLE=aarch64-linux-gnu-
           
-          # DEBUG : Lister pour comprendre ce qui se passe
-          echo "Recherche de la config..."
-          find arch/arm64/configs -name "*defconfig" | grep "kiev"
+          # On liste d'abord tout le contenu pour voir ce qu'il y a réellement
+          echo "Contenu de arch/arm64/configs :"
+          ls arch/arm64/configs
           
-          # Utilisation d'une méthode de secours si la détection automatique échoue
-          # Sur LineageOS pour SM8250 (Kiev), le fichier est souvent kiev_defconfig
-          make O=out ARCH=arm64 kiev_defconfig
+          # On tente de compiler avec le defconfig standard de Lineage pour kiev
+          # Si kiev_defconfig n'existe pas, on tente vendor/kiev_defconfig
+          if [ -f "arch/arm64/configs/kiev_defconfig" ]; then
+            make O=out ARCH=arm64 kiev_defconfig
+          else
+            make O=out ARCH=arm64 vendor/kiev_defconfig
+          fi
           
-          # Ajout des options KernelSU
+          # Ajout des options KernelSU et SUSFS
           echo "CONFIG_KSU=y" >> out/.config
           echo "CONFIG_KSU_MANUAL_HOOK=y" >> out/.config
           echo "CONFIG_KSU_SUSFS=y" >> out/.config
