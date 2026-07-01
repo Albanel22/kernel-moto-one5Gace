@@ -17,13 +17,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc bison build-essential ccache curl flex gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev binutils-aarch64-linux-gnu gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
 
-      - name: Download Toolchain
+      - name: Install Toolchain
         run: |
-          mkdir -p clang
-          echo "Téléchargement de la toolchain officielle Google..."
-          curl -LO https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master/clang-r450784d.tar.gz
-          tar -xzf clang-r450784d.tar.gz -C clang
-          echo "$(pwd)/clang/bin" >> $GITHUB_PATH
+          echo "Installation de la toolchain via APT..."
+          sudo apt-get install -y clang-14 lld-14 llvm-14
+          # Création de liens symboliques pour que le build trouve 'clang'
+          sudo ln -sf /usr/bin/clang-14 /usr/bin/clang
+          sudo ln -sf /usr/bin/ld.lld-14 /usr/bin/ld.lld
+          clang --version
 
       - name: Clone Kernel Source
         run: git clone ${{ env.KERNEL_REPO }} -b ${{ env.KERNEL_BRANCH }} --depth=1 kernel-source
@@ -40,10 +41,11 @@ jobs:
           cd kernel-source
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
+          # Utilisation du compilateur système
           export CC=clang
+          export LD=ld.lld
           mkdir -p out
           make O=out lito_defconfig
-          # On compile sans dtbo.img si le build échoue, il est souvent généré automatiquement
           make -j$(nproc --all) O=out Image.gz dtbs 2>&1 | tee build.log
 
       - name: Package with AnyKernel3
