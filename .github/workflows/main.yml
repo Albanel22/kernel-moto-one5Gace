@@ -41,12 +41,27 @@ jobs:
           cd kernel-source
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
-          # Utilisation du compilateur système
           export CC=clang
           export LD=ld.lld
           mkdir -p out
+          
+          echo "Démarrage de la compilation..."
           make O=out lito_defconfig
-          make -j$(nproc --all) O=out Image.gz dtbs 2>&1 | tee build.log
+          
+          # On compile et on affiche les erreurs si ça plante
+          if ! make -j$(nproc --all) O=out Image.gz dtbs; then
+            echo "ERREUR DE COMPILATION DÉTECTÉE"
+            # On affiche les 50 dernières lignes du log pour identifier le problème
+            tail -n 50 out/.config || true
+            exit 1
+          fi
+
+      - name: Check Build Output
+        if: always()
+        run: |
+          cd kernel-source
+          echo "Contenu du dossier de sortie :"
+          ls -R out/arch/arm64/boot/ || echo "Aucun fichier trouvé."
 
       - name: Package with AnyKernel3
         run: |
