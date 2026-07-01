@@ -1,86 +1,59 @@
-name: Build Kernel ReSukiSU - Moto Kiev
-on:
-  workflow_dispatch:
+name: Build Kernel Kiev Lineage-23.2
 
-env:
-  KERNEL_REPO: https://github.com/LineageOS/android_kernel_motorola_sm8250
-  KERNEL_BRANCH: lineage-23.2
-  ANYKERNEL_REPO: https://github.com/osm0sis/AnyKernel3.git
-  ANYKERNEL_BRANCH: master
+on:
+  push:
+    branches: [ main ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Install Build Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y bc bison build-essential ccache curl flex gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev binutils-aarch64-linux-gnu gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+      - name: Checkout
+        uses: actions/checkout@v3
 
-      - name: Install Toolchain
+      - name: Build Process
         run: |
-          echo "Installation de la toolchain via APT..."
-          sudo apt-get install -y clang-14 lld-14 llvm-14
-          # Création de liens symboliques pour que le build trouve 'clang'
-          sudo ln -sf /usr/bin/clang-14 /usr/bin/clang
-          sudo ln -sf /usr/bin/ld.lld-14 /usr/bin/ld.lld
-          clang --version
-
-      - name: Clone Kernel Source
-        run: git clone ${{ env.KERNEL_REPO }} -b ${{ env.KERNEL_BRANCH }} --depth=1 kernel-source
-
-      - name: Apply KernelSU
-        run: |
-          cd kernel-source
-          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
-          # Verification du patch
-          grep -q "CONFIG_KSU=y" arch/arm64/configs/lito_defconfig || echo "CONFIG_KSU=y" >> arch/arm64/configs/lito_defconfig
-
-      - name: Build Kernel
-        run: |
-          cd kernel-source
+          # 1. Installation des outils
+          sudo apt-get update && sudo apt-get install -y bc bison build-essential curl flex g++-aarch64-linux-gnu gcc-aarch64-linux-gnu git libssl-dev clang lld llvm zip
+          
+          # 2. Télécharger les sources LineageOS 23.2
+          git clone https://github.com/LineageOS/android_kernel_motorola_sm8250 --depth=1 -b lineage-23.2 source
+          cd source
+          
+          # 3. Intégrer KernelSU et SUSFS
+          git clone https://github.com/ReSukiSU/ReSukiSU KSU
+          cp -r KSU/kernel drivers/kernelsu
+          git clone https://gitlab.com/simonpunk/susfs4ksu susfs
+          cp -r susfs/kernel/fs/* fs/
+          cp -r susfs/kernel/include/linux/* include/linux/
+          
+          # 4. Appliquer les modifications automatiques
+          echo "obj-\$(CONFIG_KSU) += kernelsu/" >> drivers/Makefile
+          sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" drivers/Kconfig
+          sed -i 's/static DEFINE_RWLOCK(policy_rwlock);/DEFINE_RWLOCK(policy_rwlock);/g' security/selinux/ss/services.c
+          sed -i 's/static DEFINE_MUTEX(sel_mutex);/DEFINE_MUTEX(sel_mutex);/g' security/selinux/selinuxfs.c
+          
+          # 5. Compilation
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           export CC=clang
-          export LD=ld.lld
-          mkdir -p out
+          export CLANG_TRIPLE=aarch64-linux-gnu-
           
-          echo "Démarrage de la compilation..."
-          make O=out lito_defconfig
+          make O=out ARCH=arm64 vendor/kiev_defconfig
+          echo "CONFIG_KSU=y" >> out/.config
+          echo "CONFIG_KSU_MANUAL_HOOK=y" >> out/.config
+          echo "CONFIG_KSU_SUSFS=y" >> out/.config
+          make O=out ARCH=arm64 -j$(nproc)
           
-          # On compile et on affiche les erreurs si ça plante
-          if ! make -j$(nproc --all) O=out Image.gz dtbs; then
-            echo "ERREUR DE COMPILATION DÉTECTÉE"
-            # On affiche les 50 dernières lignes du log pour identifier le problème
-            tail -n 50 out/.config || true
-            exit 1
-          fi
-
-      - name: Check Build Output
-        if: always()
-        run: |
-          cd kernel-source
-          echo "Contenu du dossier de sortie :"
-          ls -R out/arch/arm64/boot/ || echo "Aucun fichier trouvé."
-
-      - name: Package with AnyKernel3
-        run: |
-          git clone ${{ env.ANYKERNEL_REPO }} -b ${{ env.ANYKERNEL_BRANCH }} AnyKernel3
-          # Copie de l'image
-          cp kernel-source/out/arch/arm64/boot/Image.gz AnyKernel3/
-          # Copie des fichiers DTB (Crucial pour la batterie/tactile)
-          cp kernel-source/out/arch/arm64/boot/dtb.img AnyKernel3/
-          cp kernel-source/out/arch/arm64/boot/dtbo.img AnyKernel3/
+          # 6. Emballage AnyKernel3
+          git clone https://github.com/osm0sis/AnyKernel3 --depth=1 ../AnyKernel3
+          cp out/arch/arm64/boot/Image.gz-dtb ../AnyKernel3/
+          cd ../AnyKernel3
+          sed -i 's/block=.*/block=auto;/g' anykernel.sh
+          zip -r9 ../AnyKernel3-kiev-lineage23.2.zip *
           
-          cd AnyKernel3
-          # Configuration AnyKernel
-          sed -i 's/device.name1=.*/device.name1=kiev/g' anykernel.sh
-          sed -i 's/is_slot_device=.*/is_slot_device=1/g' anykernel.sh
-          
-          zip -r ../KernelSU-Kiev.zip * -x ".git*"
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload
+        uses: actions/upload-artifact@v3
         with:
-          name: KernelSU-Kiev
-          path: KernelSU-Kiev.zip
+          name: AnyKernel3-Flashable
+          path: AnyKernel3-kiev-lineage23.2.zip
