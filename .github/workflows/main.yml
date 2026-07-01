@@ -3,6 +3,7 @@ name: Build Kernel Kiev Lineage-23.2
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -20,7 +21,7 @@ jobs:
           git clone https://github.com/LineageOS/android_kernel_motorola_sm8250 --depth=1 -b lineage-23.2 source
           cd source
           
-          # 3. Intégration ReSukiSU
+          # 3. Intégration KernelSU
           git clone https://github.com/ReSukiSU/ReSukiSU KSU
           cp -r KSU/kernel drivers/kernelsu
           
@@ -29,39 +30,36 @@ jobs:
           cp -r $(find susfs -type d -name "fs" | head -n 1)/* fs/
           cp -r $(find susfs -type d -name "linux" | grep "include" | head -n 1)/* include/linux/
           
-          # 5. Appliquer les modifications
+          # 5. Appliquer les hooks de sécurité
           echo "obj-\$(CONFIG_KSU) += kernelsu/" >> drivers/Makefile
           sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" drivers/Kconfig
           sed -i 's/static DEFINE_RWLOCK(policy_rwlock);/DEFINE_RWLOCK(policy_rwlock);/g' security/selinux/ss/services.c
           sed -i 's/static DEFINE_MUTEX(sel_mutex);/DEFINE_MUTEX(sel_mutex);/g' security/selinux/selinuxfs.c
           
-          # 6. Compilation
+          # 6. Compilation et vérification
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           export CC=clang
           export CLANG_TRIPLE=aarch64-linux-gnu-
           
-          # On liste d'abord tout le contenu pour voir ce qu'il y a réellement
-          echo "Contenu de arch/arm64/configs :"
-          ls arch/arm64/configs
+          mkdir -p out
+          # Utilisation du fichier defconfig optimisé (perf) pour Moto Kiev
+          cp arch/arm64/configs/vendor/kiev-perf_defconfig arch/arm64/configs/vendor/my_defconfig
+          make O=out ARCH=arm64 my_defconfig
           
-          # On tente de compiler avec le defconfig standard de Lineage pour kiev
-          # Si kiev_defconfig n'existe pas, on tente vendor/kiev_defconfig
-          if [ -f "arch/arm64/configs/kiev_defconfig" ]; then
-            make O=out ARCH=arm64 kiev_defconfig
-          else
-            make O=out ARCH=arm64 vendor/kiev_defconfig
-          fi
-          
-          # Ajout des options KernelSU et SUSFS
+          # Injection des paramètres KSU/SUSFS
           echo "CONFIG_KSU=y" >> out/.config
           echo "CONFIG_KSU_MANUAL_HOOK=y" >> out/.config
           echo "CONFIG_KSU_SUSFS=y" >> out/.config
           
-          # Compilation finale
+          # VÉRIFICATION : Confirmer que les options sont bien actives avant compilation
+          echo "--- Vérification de l'intégration KernelSU ---"
+          grep "CONFIG_KSU" out/.config
+          
+          # Compilation multi-cœurs
           make O=out ARCH=arm64 -j$(nproc)
           
-          # 7. Emballage
+          # 7. Emballage avec AnyKernel3
           git clone https://github.com/osm0sis/AnyKernel3 --depth=1 ../AnyKernel3
           cp out/arch/arm64/boot/Image.gz-dtb ../AnyKernel3/
           cd ../AnyKernel3
