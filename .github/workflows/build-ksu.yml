@@ -24,24 +24,29 @@ jobs:
           path: source
           fetch-depth: 0
 
-      - name: Clone Dependencies
-        run: |
-          cd source
-          git clone --depth 1 https://github.com/ReSukiSU/ReSukiSU KernelSU
-          git clone --depth 1 https://github.com/kdrag0n/susfs susfs
-
-      - name: Localiser SUSFS
-        run: |
-          cd source
-          echo "--- Localisation de SUSFS ---"
-          find . -type d -name "susfs"
-          echo "--- Contenu du dossier susfs ---"
-          ls -F susfs/ || echo "Dossier susfs introuvable !"
-
       - name: Setup Environment
         run: |
-          sudo apt-get update && sudo apt-get install -y clang lld llvm
+          sudo apt-get update && sudo apt-get install -y clang lld llvm unzip
           mkdir -p source/out
+
+      - name: Download Dependencies
+        run: |
+          cd source
+          # Téléchargement et extraction de KernelSU
+          curl -L -o ksu.zip https://github.com/ReSukiSU/ReSukiSU/archive/refs/heads/main.zip
+          unzip ksu.zip
+          mv ReSukiSU-main KernelSU
+          rm ksu.zip
+          
+          # Téléchargement et extraction de SUSFS
+          curl -L -o susfs.zip https://github.com/kdrag0n/susfs/archive/refs/heads/main.zip
+          unzip susfs.zip
+          mv susfs-main susfs
+          rm susfs.zip
+          
+          echo "--- Vérification des répertoires ---"
+          ls -F KernelSU/
+          ls -F susfs/
 
       - name: Apply Patches
         run: |
