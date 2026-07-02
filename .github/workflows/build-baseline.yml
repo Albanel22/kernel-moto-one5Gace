@@ -22,22 +22,22 @@ jobs:
           export CROSS_COMPILE=aarch64-linux-gnu-
           export CC=clang
           export CLANG_TRIPLE=aarch64-linux-gnu-
-          
-          # Force l'utilisation du linker LLD de LLVM
           export LD=ld.lld
-          export LD_LIBRARY_PATH=/usr/lib/llvm-14/lib # Ajustez si nécessaire selon l'image
           
           mkdir -p out
           make O=out ARCH=arm64 vendor/lito-perf_defconfig
           
-          # On ajoute LLD=1 pour forcer le link avec lld
-          # On ajoute CONFIG_LTO_NONE=y pour éviter les conflits de taille de code
-          cat >> out/.config <<EOF
-          CONFIG_LTO_NONE=y
-          EOF
+          # Désactivation LTO pour éviter les erreurs de Linker
+          sed -i 's/CONFIG_LTO_CLANG=y/# CONFIG_LTO_CLANG is not set/' out/.config
+          echo "CONFIG_LTO_NONE=y" >> out/.config
           
           make O=out ARCH=arm64 olddefconfig
           
-          # Compilation avec LLD=1
-          make O=out ARCH=arm64 -j$(nproc) LLVM=1 LLVM_IAS=1 LLD=1
+          # 1. Compilation des objets seulement (sans linker)
+          echo "Étape 1 : Compilation des objets..."
+          make O=out ARCH=arm64 -j$(nproc) LLVM=1 LLVM_IAS=1
+          
+          # 2. Liaison finale forcée avec log détaillé
+          echo "Étape 2 : Liaison finale..."
+          make O=out ARCH=arm64 V=1
 
