@@ -13,31 +13,17 @@ jobs:
 
       - name: Clone Sources
         run: |
-          # Clonage de la base (même méthode que votre baseline)
           git clone https://github.com/LineageOS/android_kernel_motorola_sm8250 --depth=1 -b lineage-23.2 source
-          
-          # Clonage des modules dans des dossiers séparés
           git clone https://github.com/ReSukiSU/ReSukiSU KSU
           git clone https://gitlab.com/simonpunk/susfs4ksu susfs
 
       - name: Patch Kernel
         run: |
-          # 1. On va dans le dossier source pour patcher
           cd source
-          
-          # 2. Intégration KSU (on utilise le chemin complet vers le workspace)
           cp -r $GITHUB_WORKSPACE/KSU/kernel drivers/kernelsu
-          
-          # 3. Intégration SUSFS (on cherche où sont les fichiers)
-          # On copie tout le contenu du dossier susfs vers le dossier source
-          # Comme la structure est identique, cela va fusionner les fichiers
           cp -r $GITHUB_WORKSPACE/susfs/* .
-          
-          # 4. Patchs nécessaires
           echo "obj-\$(CONFIG_KSU) += kernelsu/" >> drivers/Makefile
           sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" drivers/Kconfig
-
-
 
       - name: Compile Kernel
         run: |
@@ -49,19 +35,12 @@ jobs:
           
           mkdir -p out
           
-          # Liste tous les fichiers .defconfig pour être sûr de ne pas se tromper
-          echo "Liste des configurations disponibles :"
-          find arch/arm64/configs -name "*defconfig"
+          # Utilisation de la configuration 'lito-perf' (base du Snapdragon 750G)
+          make O=out ARCH=arm64 vendor/lito-perf_defconfig
           
-          # La méthode standard LineageOS pour le 'kiev' (Moto One 5G Ace)
-          # On tente le nom standard utilisé dans les builds Lineage pour ce modèle
-          make O=out ARCH=arm64 kiev_defconfig
-          
-          # Injection des options KSU
+          # Injection des options KSU/SUSFS
           echo "CONFIG_KSU=y" >> out/.config
           echo "CONFIG_KSU_SUSFS=y" >> out/.config
           
           # Compilation
           make O=out ARCH=arm64 -j$(nproc)
-
-
