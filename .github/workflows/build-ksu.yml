@@ -24,17 +24,12 @@ jobs:
           path: source
           fetch-depth: 0
 
-      - name: Checkout KernelSU
-        uses: actions/checkout@v4
-        with:
-          repository: ReSukiSU/ReSukiSU
-          path: source/KernelSU
-
-      - name: Checkout SUSFS
-        uses: actions/checkout@v4
-        with:
-          repository: sidex15/susfs
-          path: source/susfs
+      - name: Clone Dependencies
+        run: |
+          cd source
+          # Utilisation de git clone direct pour éviter les erreurs d'API GitHub
+          git clone --depth 1 https://github.com/ReSukiSU/ReSukiSU KernelSU
+          git clone --depth 1 https://github.com/kdrag0n/susfs susfs
 
       - name: Setup Environment
         run: |
