@@ -1,4 +1,4 @@
-name: Build Kernel ReSukiSU + SUSFS (Final Corrected)
+name: Build Kernel ReSukiSU + SUSFS (Full Patch)
 
 on:
   workflow_dispatch:
@@ -27,32 +27,18 @@ jobs:
           sudo apt-get update && sudo apt-get install -y clang lld llvm
           mkdir -p source/out
 
-      - name: Auto-Integration
+      - name: Apply SUSFS Patch
         run: |
           cd source
-          # 1. KernelSU
+          # 1. Installer KernelSU
           git clone --depth 1 https://github.com/ReSukiSU/ReSukiSU KernelSU
           sed -i '1i obj-y += KernelSU/' Makefile
           
-          # 2. Cloner susfs4ksu
-          git clone --depth 1 https://gitlab.com/simonpunk/susfs4ksu.git susfs_repo
+          # 2. Télécharger le patch officiel 4.19
+          wget https://raw.githubusercontent.com/JackA1ltman/NonGKI_Kernel_Build_2nd/mainline/Patches/Patch/susfs_patch_to_4.19.patch
           
-          # 3. Localisation et déplacement
-          SUSFS_SRC=$(find susfs_repo -name "susfs.c" | head -n 1)
-          cp "$SUSFS_SRC" fs/
-          
-          # 4. Patchs manuels
-          echo "obj-y += susfs.o" >> fs/Makefile
-          
-          # 5. Préparation headers
-          find susfs_repo -name "*.h" -exec cp {} include/linux/ \;
-
-      - name: Patch manquant path_umount
-        run: |
-          cd source
-          # On remplace la déclaration externe par une fonction wrapper qui pointe vers ksys_umount
-          # ksys_umount est la version standard pour démonter un path dans le noyau 4.19
-          sed -i 's|extern int path_umount(struct path \*path, int flags);|#include <linux/namei.h>\n#include <linux/mount.h>\n\nstatic inline int path_umount(struct path *path, int flags) {\n    return ksys_umount(path->dentry->d_name.name, flags);\n}|' fs/susfs.c
+          # 3. Application du patch avec vérification
+          git apply --ignore-whitespace susfs_patch_to_4.19.patch
 
       - name: Configure Kernel
         run: |
