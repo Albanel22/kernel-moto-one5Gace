@@ -19,8 +19,11 @@ jobs:
       - name: Checkout Source
         uses: actions/checkout@v4
         with:
+          repository: LineageOS/android_kernel_motorola_sm8250 # Le dépôt que vous m'avez montré
+          ref: lineage-23.2 # La branche spécifique
           path: source
           fetch-depth: 0
+
 
       - name: Setup Environment
         run: |
