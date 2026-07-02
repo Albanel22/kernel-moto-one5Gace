@@ -49,22 +49,19 @@ jobs:
           
           mkdir -p out
           
-          # Diagnostic rapide : on vérifie si le fichier existe vraiment
-          echo "Vérification du fichier de config :"
-          ls -R arch/arm64/configs/ | grep kiev
+          # Liste tous les fichiers .defconfig pour être sûr de ne pas se tromper
+          echo "Liste des configurations disponibles :"
+          find arch/arm64/configs -name "*defconfig"
           
-          # Tentative de configuration forcée avec le chemin complet
-          # On vérifie si le fichier est dans vendor ou directement dans configs
-          if [ -f arch/arm64/configs/vendor/kiev-perf_defconfig ]; then
-            make O=out ARCH=arm64 vendor/kiev-perf_defconfig
-          else
-            make O=out ARCH=arm64 kiev-perf_defconfig
-          fi
+          # La méthode standard LineageOS pour le 'kiev' (Moto One 5G Ace)
+          # On tente le nom standard utilisé dans les builds Lineage pour ce modèle
+          make O=out ARCH=arm64 kiev_defconfig
           
-          # Injection des options
+          # Injection des options KSU
           echo "CONFIG_KSU=y" >> out/.config
           echo "CONFIG_KSU_SUSFS=y" >> out/.config
           
-          # Lancement de la compilation
+          # Compilation
           make O=out ARCH=arm64 -j$(nproc)
+
 
