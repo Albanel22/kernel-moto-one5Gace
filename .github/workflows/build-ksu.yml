@@ -7,31 +7,30 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
       - name: Install Dependencies
-        run: sudo apt-get update && sudo apt-get install -y bc bison build-essential curl flex g++-aarch64-linux-gnu gcc-aarch64-linux-gnu git libssl-dev clang lld llvm zip
-
-      - name: Setup Sources
         run: |
-          # 1. Téléchargement des sources
+          sudo apt-get update && sudo apt-get install -y bc bison build-essential curl flex g++-aarch64-linux-gnu gcc-aarch64-linux-gnu git libssl-dev clang lld llvm zip
+
+      - name: Clone Sources
+        run: |
+          # Clonage de la base (même méthode que votre baseline)
           git clone https://github.com/LineageOS/android_kernel_motorola_sm8250 --depth=1 -b lineage-23.2 source
+          
+          # Clonage des modules dans des dossiers séparés
           git clone https://github.com/ReSukiSU/ReSukiSU KSU
           git clone https://gitlab.com/simonpunk/susfs4ksu susfs
-          
-          # 2. Intégration KSU
-          cp -r KSU/kernel source/drivers/kernelsu
-          
-          # 3. Intégration dynamique SUSFS
-          FS_DIR=$(find susfs -type d -name "fs" | head -n 1)
-          cp -r $FS_DIR/* source/fs/
-          
-          LINUX_DIR=$(find susfs -type d -name "linux" | grep "include" | head -n 1)
-          cp -r $LINUX_DIR/* source/include/linux/
-          
-          # 4. Patchs manuels
+
+      - name: Patch Kernel
+        run: |
           cd source
+          # Intégration KSU
+          cp -r ../KSU/kernel drivers/kernelsu
+          
+          # Intégration SUSFS
+          cp -r ../susfs/fs/* fs/
+          cp -r ../susfs/include/linux/* include/linux/
+          
+          # Patchs nécessaires
           echo "obj-\$(CONFIG_KSU) += kernelsu/" >> drivers/Makefile
           sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" drivers/Kconfig
 
@@ -45,10 +44,7 @@ jobs:
           
           mkdir -p out
           
-          # Vérification du fichier avant compilation
-          ls -l arch/arm64/configs/vendor/kiev-perf_defconfig
-          
-          # Configuration avec le chemin complet incluant 'vendor/'
+          # Utilisation du chemin exact trouvé par votre baseline
           make O=out ARCH=arm64 vendor/kiev-perf_defconfig
           
           # Injection des options
