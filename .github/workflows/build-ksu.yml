@@ -49,12 +49,22 @@ jobs:
           
           mkdir -p out
           
-          # Utilisation du chemin exact trouvé par votre baseline
-          make O=out ARCH=arm64 vendor/kiev-perf_defconfig
+          # Diagnostic rapide : on vérifie si le fichier existe vraiment
+          echo "Vérification du fichier de config :"
+          ls -R arch/arm64/configs/ | grep kiev
+          
+          # Tentative de configuration forcée avec le chemin complet
+          # On vérifie si le fichier est dans vendor ou directement dans configs
+          if [ -f arch/arm64/configs/vendor/kiev-perf_defconfig ]; then
+            make O=out ARCH=arm64 vendor/kiev-perf_defconfig
+          else
+            make O=out ARCH=arm64 kiev-perf_defconfig
+          fi
           
           # Injection des options
           echo "CONFIG_KSU=y" >> out/.config
           echo "CONFIG_KSU_SUSFS=y" >> out/.config
           
-          # Compilation
+          # Lancement de la compilation
           make O=out ARCH=arm64 -j$(nproc)
+
