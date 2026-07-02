@@ -18,23 +18,14 @@ jobs:
           sudo apt-get update && sudo apt-get install -y clang lld llvm
           mkdir -p source/out
 
-      - name: Integrate ReSukiSU
+      - name: Debug Source Structure
         run: |
           cd source
-          # Clone du fork ReSukiSU
-          git clone https://github.com/ReSukiSU/ReSukiSU KernelSU
-          
-          # On cherche le Makefile qui contient la chaîne 'VERSION =' 
-          # (C'est la signature unique du Makefile racine du noyau Linux)
-          KERNEL_MAKEFILE=$(grep -l "VERSION =" Makefile* 2>/dev/null || find . -maxdepth 2 -name "Makefile" -not -path "./KernelSU/*")
-          
-          echo "Patching : $KERNEL_MAKEFILE"
-          sed -i '1i obj-y += KernelSU/' "$KERNEL_MAKEFILE"
-          
-          # Patch du hook (recherche du core.c dans le dossier 'kernel/')
-          CORE_C=$(find kernel -name "core.c" | head -n 1)
-          sed -i '/#include <linux\/sched\/rt.h>/a #include "../KernelSU/kernel/ksu.h"' "$CORE_C"
-          sed -i '/context_switch(rq, prev, next);/i \    ksu_handle_trace_sched_switch(prev, next);' "$CORE_C"
+          echo "--- Liste des répertoires à la racine de source ---"
+          ls -F
+          echo "--- Recherche récursive du Makefile racine ---"
+          # On cherche un fichier qui contient 'VERSION =' (la signature du noyau)
+          find . -type f -name "Makefile" -exec grep -l "VERSION =" {} + 
 
       - name: Configure Kernel
         run: |
