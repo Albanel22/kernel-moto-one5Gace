@@ -32,21 +32,22 @@ jobs:
       - name: Download Dependencies
         run: |
           cd source
-          # Téléchargement et extraction de KernelSU
+          # 1. KernelSU
           curl -L -o ksu.zip https://github.com/ReSukiSU/ReSukiSU/archive/refs/heads/main.zip
           unzip ksu.zip
           mv ReSukiSU-main KernelSU
           rm ksu.zip
           
-          # Téléchargement et extraction de SUSFS
-          curl -L -o susfs.zip https://github.com/kdrag0n/susfs/archive/refs/heads/main.zip
+          # 2. SUSFS (Version officielle simonpunk)
+          curl -L -o susfs.zip https://gitlab.com/simonpunk/susfs4ksu/-/archive/main/susfs4ksu-main.zip
           unzip susfs.zip
-          mv susfs-main susfs
+          mv susfs4ksu-main susfs
           rm susfs.zip
           
-          echo "--- Vérification des répertoires ---"
+          echo "--- Vérification ---"
           ls -F KernelSU/
           ls -F susfs/
+
 
       - name: Apply Patches
         run: |
