@@ -50,8 +50,9 @@ jobs:
       - name: Patch manquant path_umount
         run: |
           cd source
-          # Déclaration pour corriger l'erreur de compilation
-          sed -i '1i #include <linux/path.h>\nextern int path_umount(struct path *path, int flags);' fs/susfs.c
+          # On remplace la déclaration externe par une fonction wrapper qui pointe vers ksys_umount
+          # ksys_umount est la version standard pour démonter un path dans le noyau 4.19
+          sed -i 's|extern int path_umount(struct path \*path, int flags);|#include <linux/namei.h>\n#include <linux/mount.h>\n\nstatic inline int path_umount(struct path *path, int flags) {\n    return ksys_umount(path->dentry->d_name.name, flags);\n}|' fs/susfs.c
 
       - name: Configure Kernel
         run: |
