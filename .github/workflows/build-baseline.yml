@@ -1,7 +1,12 @@
 name: Baseline Kernel Build (No Mods)
 
+name: Nom de votre Build
+
 on:
-  workflow_dispatch:
+  # push:          <-- Mettez un '#' devant "push" pour le désactiver
+  #   branches: [ main ]
+  workflow_dispatch: # <-- Cette ligne ajoute le bouton "Run workflow" manuel
+
 
 jobs:
   build:
