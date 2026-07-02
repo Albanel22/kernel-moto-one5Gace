@@ -44,8 +44,12 @@ jobs:
           export CLANG_TRIPLE=aarch64-linux-gnu-
           
           mkdir -p out
-          # Configuration
-          make O=out ARCH=arm64 kiev-perf_defconfig
+          
+          # Vérification du fichier avant compilation
+          ls -l arch/arm64/configs/vendor/kiev-perf_defconfig
+          
+          # Configuration avec le chemin complet incluant 'vendor/'
+          make O=out ARCH=arm64 vendor/kiev-perf_defconfig
           
           # Injection des options
           echo "CONFIG_KSU=y" >> out/.config
