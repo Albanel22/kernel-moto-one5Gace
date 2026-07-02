@@ -1,0 +1,31 @@
+name: Baseline Kernel Build (No Mods)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y bc bison build-essential curl flex g++-aarch64-linux-gnu gcc-aarch64-linux-gnu git libssl-dev clang lld llvm zip
+
+      - name: Clone Sources
+        run: |
+          git clone https://github.com/LineageOS/android_kernel_motorola_sm8250 --depth=1 -b lineage-23.2 source
+
+      - name: Compile Baseline
+        run: |
+          cd source
+          export ARCH=arm64
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export CC=clang
+          export CLANG_TRIPLE=aarch64-linux-gnu-
+          
+          mkdir -p out
+          # Utilisation directe du defconfig de base
+          make O=out ARCH=arm64 vendor/kiev-perf_defconfig
+          
+          # Compilation
+          make O=out ARCH=arm64 -j$(nproc)
