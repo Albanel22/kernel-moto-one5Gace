@@ -42,10 +42,10 @@ jobs:
           
           mkdir -p out
           
-          # Configuration standard
+          # Configuration
           make O=out ARCH=arm64 vendor/lito-perf_defconfig
           
-          # Activation forcée des options KSU et SUSFS dans le .config
+          # Injection des options KSU/SUSFS
           cat >> out/.config <<EOF
           CONFIG_KSU=y
           CONFIG_KSU_SUSFS=y
@@ -58,8 +58,9 @@ jobs:
           CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
           EOF
           
-          # Finalisation de la configuration
           make O=out ARCH=arm64 olddefconfig
           
-          # Compilation
-          make O=out ARCH=arm64 -j$(nproc)
+          # Compilation avec V=1 pour voir les erreurs détaillées
+          # On ajoute -k pour continuer malgré les erreurs mineures
+          make O=out ARCH=arm64 -j$(nproc) V=1 || make O=out ARCH=arm64 -j1 V=1
+
