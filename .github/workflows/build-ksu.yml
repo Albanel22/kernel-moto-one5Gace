@@ -20,24 +20,21 @@ jobs:
 
       - name: Integrate ReSukiSU
         run: |
-          # On cherche où est le vrai dossier contenant le Makefile
-          find . -name "Makefile" | grep "Makefile"
-          
-          # On se place dans le dossier qui contient le Makefile (probablement dans source/...)
-          cd $(find . -maxdepth 2 -name "Makefile" -exec dirname {} \;)
-          
-          # Clone du fork ReSukiSU à la racine du noyau
+          cd source
+          # Clone du fork ReSukiSU
           git clone https://github.com/ReSukiSU/ReSukiSU KernelSU
           
-          # 1. Patch du Makefile principal (trouvé dynamiquement)
-          sed -i '1i obj-y += KernelSU/' Makefile
+          # On cherche le Makefile qui contient la chaîne 'VERSION =' 
+          # (C'est la signature unique du Makefile racine du noyau Linux)
+          KERNEL_MAKEFILE=$(grep -l "VERSION =" Makefile* 2>/dev/null || find . -maxdepth 2 -name "Makefile" -not -path "./KernelSU/*")
           
-          # 2. Patch manuel du hook scheduler
-          # On cible le fichier core.c via une recherche pour être sûr du chemin
-          CORE_C=$(find . -name "core.c" | grep "sched/core.c")
+          echo "Patching : $KERNEL_MAKEFILE"
+          sed -i '1i obj-y += KernelSU/' "$KERNEL_MAKEFILE"
           
-          sed -i '/#include <linux\/sched\/rt.h>/a #include "../KernelSU/kernel/ksu.h"' $CORE_C
-          sed -i '/context_switch(rq, prev, next);/i \    ksu_handle_trace_sched_switch(prev, next);' $CORE_C
+          # Patch du hook (recherche du core.c dans le dossier 'kernel/')
+          CORE_C=$(find kernel -name "core.c" | head -n 1)
+          sed -i '/#include <linux\/sched\/rt.h>/a #include "../KernelSU/kernel/ksu.h"' "$CORE_C"
+          sed -i '/context_switch(rq, prev, next);/i \    ksu_handle_trace_sched_switch(prev, next);' "$CORE_C"
 
       - name: Configure Kernel
         run: |
