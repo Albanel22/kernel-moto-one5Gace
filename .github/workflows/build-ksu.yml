@@ -1,4 +1,4 @@
-name: Build Kernel ReSukiSU
+name: Build Kernel ReSukiSU + SUSFS
 
 on:
   workflow_dispatch:
@@ -16,66 +16,58 @@ jobs:
       LLVM_IAS: 1
 
     steps:
-    
       - name: Checkout Source
         uses: actions/checkout@v4
         with:
-          repository: LineageOS/android_kernel_motorola_sm8250 # Le dépôt que vous m'avez montré
-          ref: lineage-23.2 # La branche spécifique
+          repository: LineageOS/android_kernel_motorola_sm8250
+          ref: lineage-23.2
           path: source
           fetch-depth: 0
-
 
       - name: Setup Environment
         run: |
           sudo apt-get update && sudo apt-get install -y clang lld llvm
           mkdir -p source/out
 
-      - name: Integrate ReSukiSU
+      - name: Préparation et Vérification Pré-Vol
         run: |
-          # 1. Aller dans le dossier source
           cd source
-          
-          # 2. Clone du fork KernelSU
+          # 1. Récupération des composants
           git clone https://github.com/ReSukiSU/ReSukiSU KernelSU
+          git clone https://github.com/sidex15/susfs susfs
           
-          # 3. Patch du Makefile - On pointe explicitement vers le Makefile actuel
-          # On vérifie sa présence avec 'ls' pour être sûr
-          if [ -f "Makefile" ]; then
-            sed -i '1i obj-y += KernelSU/' Makefile
-            echo "Makefile patché avec succès."
-          else
-            echo "ERREUR : Makefile introuvable dans $(pwd)"
-            ls -F
-            exit 1
-          fi
+          # 2. Patch Makefile (KernelSU)
+          sed -i '1i obj-y += KernelSU/' Makefile
           
-          # 4. Patch du scheduler
-          CORE_C=$(find kernel -name "core.c" | head -n 1)
-          if [ -f "$CORE_C" ]; then
-            sed -i '/#include <linux\/sched\/rt.h>/a #include "../KernelSU/kernel/ksu.h"' "$CORE_C"
-            sed -i '/context_switch(rq, prev, next);/i \    ksu_handle_trace_sched_switch(prev, next);' "$CORE_C"
-            echo "Patch scheduler appliqué."
-          else
-            echo "ERREUR : Fichier sched/core.c introuvable."
-            exit 1
-          fi
+          # 3. Application des Hooks SUSFS (via sed)
+          sed -i '/SYSCALL_DEFINE2(newlstat/i #ifdef CONFIG_KSU_MANUAL_HOOK\n__attribute__((hot))\nextern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);\nextern void ksu_handle_newfstat_ret(unsigned int *fd, struct stat __user **statbuf_ptr);\n#if defined(__ARCH_WANT_STAT64) || defined(__ARCH_WANT_COMPAT_STAT64)\nextern void ksu_handle_fstat64_ret(unsigned long *fd, struct stat64 __user **statbuf_ptr);\n#endif\n#endif\n' fs/stat.c
+          sed -i '/error = vfs_fstatat(dfd, filename, \&stat, flag);/i #ifdef CONFIG_KSU_MANUAL_HOOK\n\tksu_handle_stat(&dfd, &filename, &flag);\n#endif' fs/stat.c
+          sed -i '/long do_faccessat/i #ifdef CONFIG_KSU_MANUAL_HOOK\n__attribute__((hot))\nextern int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode, int *flags);\n#endif\n' fs/open.c
+          sed -i '/return do_faccessat(dfd, filename, mode);/i #ifdef CONFIG_KSU_MANUAL_HOOK\n\tksu_handle_faccessat(&dfd, &filename, &mode, NULL);\n#endif' fs/open.c
+          sed -i '/void input_event/i #ifdef CONFIG_KSU_MANUAL_HOOK\nextern bool ksu_input_hook __read_mostly;\nextern __attribute__((cold)) int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code, int *value);\n#endif\n' drivers/input/input.c
+          sed -i '/unsigned long flags;/a #ifdef CONFIG_KSU_MANUAL_HOOK\n\tif (unlikely(ksu_input_hook))\n\t\tksu_handle_input_handle_event(&type, &code, &value);\n#endif' drivers/input/input.c
+          sed -i '/ssize_t ksys_read/a #ifdef CONFIG_KSU_MANUAL_HOOK\nextern bool ksu_init_rc_hook __read_mostly;\nextern __attribute__((cold)) int ksu_handle_sys_read(unsigned int fd, char __user **buf_ptr, size_t *count_ptr);\n#endif' fs/read_write.c
+          sed -i '/return ksys_read(fd, buf, count);/i #ifdef CONFIG_KSU_MANUAL_HOOK\n\tif (unlikely(ksu_init_rc_hook)) \n\t\tksu_handle_sys_read(fd, &buf, &count);\n#endif' fs/read_write.c
+          sed -i 's/static ssize_t (\*write_op\[\])/ssize_t (*write_op[])/' security/selinux/selinuxfs.c
+          sed -i 's/static const struct file_operations sel_handle_status_ops/const struct file_operations sel_handle_status_ops/' security/selinux/selinuxfs.c
+          sed -i 's/static struct security_operations selinux_ops/struct security_operations selinux_ops/' security/selinux/hooks.c
 
       - name: Configure Kernel
         run: |
           cd source
-          # Application de la config
           make O=out ARCH=arm64 vendor/lito-perf_defconfig
-          
-          # Activation KSU et désactivation LTO
-          echo "CONFIG_KSU=y" >> out/.config
+          ./scripts/config --file out/.config -e CONFIG_KSU -e CONFIG_KSU_MANUAL_HOOK -e CONFIG_KSU_SUSFS
           sed -i 's/CONFIG_LTO_CLANG=y/# CONFIG_LTO_CLANG is not set/' out/.config
           echo "CONFIG_LTO_NONE=y" >> out/.config
-          
-          # Finalisation config
           make O=out ARCH=arm64 olddefconfig
 
       - name: Compile Kernel
         run: |
           cd source
           make O=out ARCH=arm64 -j$(nproc) Image
+
+      - name: Upload Kernel Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kernel-ReSukiSU-SUSFS
+          path: source/out/arch/arm64/boot/Image
