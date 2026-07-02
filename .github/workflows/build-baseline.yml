@@ -24,8 +24,13 @@ jobs:
           export CLANG_TRIPLE=aarch64-linux-gnu-
           
           mkdir -p out
-          # Utilisation directe du defconfig de base
-          make O=out ARCH=arm64 vendor/kiev-perf_defconfig
+          
+          # Copie manuelle et explicite du fichier de config
+          # On s'assure qu'il est copié directement dans le dossier des configs
+          cp arch/arm64/configs/vendor/kiev-perf_defconfig arch/arm64/configs/kiev-perf_defconfig
+          
+          # On lance la config en utilisant le nom copié à la racine
+          make O=out ARCH=arm64 kiev-perf_defconfig
           
           # Compilation
           make O=out ARCH=arm64 -j$(nproc)
