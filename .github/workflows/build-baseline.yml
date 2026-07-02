@@ -33,8 +33,8 @@ jobs:
           
           make O=out ARCH=arm64 olddefconfig
           
-          # Build en mode verbeux total, sans parallélisme (-j1)
-          # Cela empêche le mélange des logs et force l'affichage de l'erreur fatale
-          make O=out ARCH=arm64 V=1 -j1 LLVM=1 LLVM_IAS=1 LLD=1
+          # BUILD CIBLÉ : on ne compile que 'Image' (le noyau)
+          # On saute 'dtbs' qui est trop lourd et cause le Segfault
+          make O=out ARCH=arm64 -j$(nproc) LLVM=1 LLVM_IAS=1 Image
 
 
