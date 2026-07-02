@@ -1,4 +1,4 @@
-name: Build Kernel ReSukiSU + SUSFS (Rescue)
+name: Build Kernel ReSukiSU + SUSFS (Auto-Fix)
 
 on:
   workflow_dispatch:
@@ -27,26 +27,31 @@ jobs:
           sudo apt-get update && sudo apt-get install -y clang lld llvm
           mkdir -p source/out
 
-      - name: Integration Manuelle
+      - name: Auto-Integration
         run: |
           cd source
           # 1. KernelSU
           git clone --depth 1 https://github.com/ReSukiSU/ReSukiSU KernelSU
           sed -i '1i obj-y += KernelSU/' Makefile
           
-          # 2. Cloner le repo susfs4ksu
+          # 2. Cloner susfs4ksu
           git clone --depth 1 https://gitlab.com/simonpunk/susfs4ksu.git susfs_repo
           
-          # 3. Copier les fichiers essentiels manuellement (plus sûr que patch)
-          cp susfs_repo/kernel_source/fs/susfs.c fs/
-          cp susfs_repo/kernel_source/include/linux/susfs.h include/linux/
+          # 3. AUTO-LOCALISATION ET DÉPLACEMENT
+          echo "Recherche du fichier susfs.c..."
+          SUSFS_SRC=$(find susfs_repo -name "susfs.c" | head -n 1)
+          if [ -z "$SUSFS_SRC" ]; then
+            echo "Erreur: susfs.c introuvable!" && exit 1
+          fi
+          echo "Trouvé à: $SUSFS_SRC"
+          cp "$SUSFS_SRC" fs/
           
-          # 4. Patchs manuels via sed pour garantir l'intégration
+          # 4. Patchs manuels
           echo "obj-y += susfs.o" >> fs/Makefile
           
-          # Ici, nous appliquons uniquement les hooks de base requis pour que le build passe
-          # Si ça compile, nous ajouterons les hooks avancés un par un.
-          echo "Integration basique terminée."
+          # 5. Préparation minimale des headers
+          # On cherche tous les .h dans le dépôt susfs et on les copie dans include/linux
+          find susfs_repo -name "*.h" -exec cp {} include/linux/ \;
 
       - name: Configure Kernel
         run: |
