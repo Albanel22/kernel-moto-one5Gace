@@ -20,23 +20,24 @@ jobs:
 
       - name: Integrate ReSukiSU
         run: |
-          cd source
-          # Clone du fork ReSukiSU
+          # On cherche où est le vrai dossier contenant le Makefile
+          find . -name "Makefile" | grep "Makefile"
+          
+          # On se place dans le dossier qui contient le Makefile (probablement dans source/...)
+          cd $(find . -maxdepth 2 -name "Makefile" -exec dirname {} \;)
+          
+          # Clone du fork ReSukiSU à la racine du noyau
           git clone https://github.com/ReSukiSU/ReSukiSU KernelSU
           
-          # 1. Patch du Makefile principal
-          # On ajoute KernelSU au début des objets pour qu'il soit traité par le build
+          # 1. Patch du Makefile principal (trouvé dynamiquement)
           sed -i '1i obj-y += KernelSU/' Makefile
           
-          # 2. Patch manuel du hook scheduler (Plus sécurisé)
-          # On cherche une ligne unique dans le fichier core.c pour injecter le include
-          # Si cette commande échoue, nous devrons adapter le pattern
-          sed -i '/#include <linux\/sched\/rt.h>/a #include "../KernelSU/kernel/ksu.h"' kernel/sched/core.c
+          # 2. Patch manuel du hook scheduler
+          # On cible le fichier core.c via une recherche pour être sûr du chemin
+          CORE_C=$(find . -name "core.c" | grep "sched/core.c")
           
-          # On injecte le hook de trace à la fin de la fonction 'sched_fork' ou équivalent 
-          # Attention : C'est le point le plus critique. 
-          # On ajoute l'appel ksu_handle_trace_sched_switch après la définition de prev/next
-          sed -i '/context_switch(rq, prev, next);/i \    ksu_handle_trace_sched_switch(prev, next);' kernel/sched/core.c
+          sed -i '/#include <linux\/sched\/rt.h>/a #include "../KernelSU/kernel/ksu.h"' $CORE_C
+          sed -i '/context_switch(rq, prev, next);/i \    ksu_handle_trace_sched_switch(prev, next);' $CORE_C
 
       - name: Configure Kernel
         run: |
