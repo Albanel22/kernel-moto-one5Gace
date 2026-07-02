@@ -1,7 +1,5 @@
 name: Baseline Kernel Build (No Mods)
 
-name: Nom de votre Build
-
 on:
   # push:          <-- Mettez un '#' devant "push" pour le désactiver
   #   branches: [ main ]
