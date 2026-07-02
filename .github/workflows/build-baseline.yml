@@ -23,17 +23,21 @@ jobs:
           export CC=clang
           export CLANG_TRIPLE=aarch64-linux-gnu-
           
-          # Force l'utilisation des outils binaires GNU classiques
+          # Force l'utilisation du linker LLD de LLVM
           export LD=ld.lld
-          export AR=llvm-ar
-          export NM=llvm-nm
-          export OBJCOPY=llvm-objcopy
-          export OBJDUMP=llvm-objdump
-          export STRIP=llvm-strip
+          export LD_LIBRARY_PATH=/usr/lib/llvm-14/lib # Ajustez si nécessaire selon l'image
           
           mkdir -p out
           make O=out ARCH=arm64 vendor/lito-perf_defconfig
           
-          # On ajoute LLVM=1 et LLVM_IAS=1 pour utiliser la suite LLVM complète
-          make O=out ARCH=arm64 -j$(nproc) LLVM=1 LLVM_IAS=1
+          # On ajoute LLD=1 pour forcer le link avec lld
+          # On ajoute CONFIG_LTO_NONE=y pour éviter les conflits de taille de code
+          cat >> out/.config <<EOF
+          CONFIG_LTO_NONE=y
+          EOF
+          
+          make O=out ARCH=arm64 olddefconfig
+          
+          # Compilation avec LLD=1
+          make O=out ARCH=arm64 -j$(nproc) LLVM=1 LLVM_IAS=1 LLD=1
 
