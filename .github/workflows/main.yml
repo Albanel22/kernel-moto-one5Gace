@@ -1,9 +1,10 @@
 name: Build Kernel Kiev Lineage-23.2
 
 on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
+  # push:          <-- Mettez un '#' devant "push" pour le désactiver
+  #   branches: [ main ]
+  workflow_dispatch: # <-- Cette ligne ajoute le bouton "Run workflow" manuel
+
 
 jobs:
   build:
