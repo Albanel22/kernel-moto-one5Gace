@@ -27,17 +27,14 @@ jobs:
           mkdir -p out
           make O=out ARCH=arm64 vendor/lito-perf_defconfig
           
-          # Désactivation LTO pour éviter les erreurs de Linker
+          # Désactivation LTO
           sed -i 's/CONFIG_LTO_CLANG=y/# CONFIG_LTO_CLANG is not set/' out/.config
           echo "CONFIG_LTO_NONE=y" >> out/.config
           
           make O=out ARCH=arm64 olddefconfig
           
-          # 1. Compilation des objets seulement (sans linker)
-          echo "Étape 1 : Compilation des objets..."
-          make O=out ARCH=arm64 -j$(nproc) LLVM=1 LLVM_IAS=1
-          
-          # 2. Liaison finale forcée avec log détaillé
-          echo "Étape 2 : Liaison finale..."
-          make O=out ARCH=arm64 V=1
+          # Build en mode verbeux total, sans parallélisme (-j1)
+          # Cela empêche le mélange des logs et force l'affichage de l'erreur fatale
+          make O=out ARCH=arm64 V=1 -j1 LLVM=1 LLVM_IAS=1 LLD=1
+
 
