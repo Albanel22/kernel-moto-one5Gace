@@ -7,28 +7,30 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Sources
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Install Dependencies
         run: sudo apt-get update && sudo apt-get install -y bc bison build-essential curl flex g++-aarch64-linux-gnu gcc-aarch64-linux-gnu git libssl-dev clang lld llvm zip
 
-      - name: Apply KSU and SUSFS
+      - name: Setup Sources
         run: |
-          cd source
+          # Téléchargement des sources de Motorola
+          git clone https://github.com/LineageOS/android_kernel_motorola_sm8250 --depth=1 -b lineage-23.2 source
           
-          # 1. Clonage des modules
+          # Clonage des modules
           git clone https://github.com/ReSukiSU/ReSukiSU KSU
           git clone https://gitlab.com/simonpunk/susfs4ksu susfs
           
-          # 2. Intégration KSU
-          cp -r KSU/kernel drivers/kernelsu
+          # Intégration KSU
+          cp -r KSU/kernel source/drivers/kernelsu
           
-          # 3. Intégration SUSFS (copie précise)
-          cp -r $(find susfs -type d -name "fs" | head -n 1)/* fs/
-          cp -r $(find susfs -type d -name "linux" | grep "include" | head -n 1)/* include/linux/
+          # Intégration SUSFS
+          cp -r susfs/fs/* source/fs/
+          cp -r susfs/include/linux/* source/include/linux/
           
-          # 4. Patchs manuels de sécurité (indispensable pour SM8250)
+          # Patchs nécessaires
+          cd source
           echo "obj-\$(CONFIG_KSU) += kernelsu/" >> drivers/Makefile
           sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" drivers/Kconfig
 
@@ -41,12 +43,12 @@ jobs:
           export CLANG_TRIPLE=aarch64-linux-gnu-
           
           mkdir -p out
-          # Utilisation du chemin confirmé par notre test précédent
+          # Utilisation de la configuration par défaut
           make O=out ARCH=arm64 kiev-perf_defconfig
           
-          # Injection configuration
+          # Injection de KSU/SUSFS dans la config
           echo "CONFIG_KSU=y" >> out/.config
           echo "CONFIG_KSU_SUSFS=y" >> out/.config
           
-          # Compilation
+          # Lancement de la compilation
           make O=out ARCH=arm64 -j$(nproc)
