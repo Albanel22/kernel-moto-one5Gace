@@ -29,35 +29,33 @@ jobs:
 
       - name: Integrate ReSukiSU
         run: |
-          # On affiche le chemin complet pour le diagnostic
-          pwd
-          ls -F
+          # 1. Aller dans le dossier source
+          cd source
           
-          # On s'assure d'être dans le bon répertoire
-          # Si le Makefile est à la racine du dépôt, il doit être ici
-          if [ -f "Makefile" ]; then
-            echo "Makefile trouvé à la racine."
-          elif [ -d "source" ]; then
-            echo "Le Makefile semble être dans le dossier 'source'."
-            cd source
-          fi
-          
-          # Clone du fork
+          # 2. Clone du fork KernelSU
           git clone https://github.com/ReSukiSU/ReSukiSU KernelSU
           
-          # Patch du Makefile
-          sed -i '1i obj-y += KernelSU/' Makefile
-          
-          # Patch du scheduler
-          # On cherche le dossier 'kernel' qui contient core.c
-          CORE_C=$(find kernel -name "core.c" | head -n 1)
-          if [ -z "$CORE_C" ]; then
-             echo "Erreur: Impossible de trouver core.c"
-             exit 1
+          # 3. Patch du Makefile - On pointe explicitement vers le Makefile actuel
+          # On vérifie sa présence avec 'ls' pour être sûr
+          if [ -f "Makefile" ]; then
+            sed -i '1i obj-y += KernelSU/' Makefile
+            echo "Makefile patché avec succès."
+          else
+            echo "ERREUR : Makefile introuvable dans $(pwd)"
+            ls -F
+            exit 1
           fi
           
-          sed -i '/#include <linux\/sched\/rt.h>/a #include "../KernelSU/kernel/ksu.h"' "$CORE_C"
-          sed -i '/context_switch(rq, prev, next);/i \    ksu_handle_trace_sched_switch(prev, next);' "$CORE_C"
+          # 4. Patch du scheduler
+          CORE_C=$(find kernel -name "core.c" | head -n 1)
+          if [ -f "$CORE_C" ]; then
+            sed -i '/#include <linux\/sched\/rt.h>/a #include "../KernelSU/kernel/ksu.h"' "$CORE_C"
+            sed -i '/context_switch(rq, prev, next);/i \    ksu_handle_trace_sched_switch(prev, next);' "$CORE_C"
+            echo "Patch scheduler appliqué."
+          else
+            echo "ERREUR : Fichier sched/core.c introuvable."
+            exit 1
+          fi
 
       - name: Configure Kernel
         run: |
