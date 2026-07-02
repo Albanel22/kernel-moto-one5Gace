@@ -33,11 +33,14 @@ jobs:
         run: |
           cd source
           # 1. Récupération des composants
-          git clone https://github.com/ReSukiSU/ReSukiSU KernelSU
-          git clone https://github.com/sidex15/susfs susfs
+          # Utilisation de HTTPS standard pour éviter les blocages d'authentification
+          git clone --depth 1 https://github.com/ReSukiSU/ReSukiSU KernelSU
+          git clone --depth 1 https://github.com/sidex15/susfs susfs
           
           # 2. Patch Makefile (KernelSU)
           sed -i '1i obj-y += KernelSU/' Makefile
+          
+          # [Le reste de vos commandes sed restent identiques...]
           
           # 3. Application des Hooks SUSFS (via sed)
           sed -i '/SYSCALL_DEFINE2(newlstat/i #ifdef CONFIG_KSU_MANUAL_HOOK\n__attribute__((hot))\nextern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);\nextern void ksu_handle_newfstat_ret(unsigned int *fd, struct stat __user **statbuf_ptr);\n#if defined(__ARCH_WANT_STAT64) || defined(__ARCH_WANT_COMPAT_STAT64)\nextern void ksu_handle_fstat64_ret(unsigned long *fd, struct stat64 __user **statbuf_ptr);\n#endif\n#endif\n' fs/stat.c
