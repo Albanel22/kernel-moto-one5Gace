@@ -15,16 +15,15 @@ jobs:
         run: |
           git clone https://github.com/LineageOS/android_kernel_motorola_sm8250 --depth=1 -b lineage-23.2 source
 
+      
       - name: Compile Baseline
         run: |
-          # 1. Diagnostic : On affiche où on est et ce qu'il y a dans les dossiers
-          pwd
-          ls -R arch/arm64/configs/ | grep "kiev" || echo "Fichier introuvable"
+          # D'abord, on se déplace dans le dossier contenant le code
+          cd source
           
-          # Si le fichier existe, on récupère son chemin exact
+          # Maintenant, on peut vérifier le contenu
+          echo "Contenu actuel du répertoire source :"
+          ls -R arch/arm64/configs/
+          
+          # Diagnostic pour trouver le fichier
           find . -name "*kiev*defconfig"
-          
-          # 2. On attend votre réponse avec le résultat de ces commandes
-          echo "Arrêt volontaire pour diagnostic"
-          exit 1
-
