@@ -1,4 +1,4 @@
-name: Build Kernel ReSukiSU + SUSFS (Auto-Fix)
+name: Build Kernel ReSukiSU + SUSFS (Final Corrected)
 
 on:
   workflow_dispatch:
@@ -37,21 +37,21 @@ jobs:
           # 2. Cloner susfs4ksu
           git clone --depth 1 https://gitlab.com/simonpunk/susfs4ksu.git susfs_repo
           
-          # 3. AUTO-LOCALISATION ET DÉPLACEMENT
-          echo "Recherche du fichier susfs.c..."
+          # 3. Localisation et déplacement
           SUSFS_SRC=$(find susfs_repo -name "susfs.c" | head -n 1)
-          if [ -z "$SUSFS_SRC" ]; then
-            echo "Erreur: susfs.c introuvable!" && exit 1
-          fi
-          echo "Trouvé à: $SUSFS_SRC"
           cp "$SUSFS_SRC" fs/
           
           # 4. Patchs manuels
           echo "obj-y += susfs.o" >> fs/Makefile
           
-          # 5. Préparation minimale des headers
-          # On cherche tous les .h dans le dépôt susfs et on les copie dans include/linux
+          # 5. Préparation headers
           find susfs_repo -name "*.h" -exec cp {} include/linux/ \;
+
+      - name: Patch manquant path_umount
+        run: |
+          cd source
+          # Déclaration pour corriger l'erreur de compilation
+          sed -i '1i #include <linux/path.h>\nextern int path_umount(struct path *path, int flags);' fs/susfs.c
 
       - name: Configure Kernel
         run: |
@@ -66,3 +66,9 @@ jobs:
         run: |
           cd source
           make O=out ARCH=arm64 -j$(nproc) Image
+
+      - name: Upload Kernel Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kernel-ReSukiSU-SUSFS-Final
+          path: source/out/arch/arm64/boot/Image
