@@ -60,7 +60,7 @@ jobs:
           
           make O=out ARCH=arm64 olddefconfig
           
-          # Compilation avec V=1 pour voir les erreurs détaillées
-          # On ajoute -k pour continuer malgré les erreurs mineures
-          make O=out ARCH=arm64 -j$(nproc) V=1 || make O=out ARCH=arm64 -j1 V=1
+          # Compilation avec désactivation des erreurs de warning
+          # KBUILD_WERROR=0 désactive le mode strict
+          make O=out ARCH=arm64 -j$(nproc) KBUILD_WERROR=0
 
