@@ -6,6 +6,15 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      ARCH: arm64
+      CROSS_COMPILE: aarch64-linux-gnu-
+      CC: clang
+      CLANG_TRIPLE: aarch64-linux-gnu-
+      LD: ld.lld
+      LLVM: 1
+      LLVM_IAS: 1
+
     steps:
       - name: Checkout Source
         uses: actions/checkout@v4
@@ -18,43 +27,32 @@ jobs:
           sudo apt-get update && sudo apt-get install -y clang lld llvm
           mkdir -p source/out
 
-      - name: Debug Source Structure
+      - name: Integrate ReSukiSU
         run: |
           cd source
-          echo "--- Liste des répertoires à la racine de source ---"
-          ls -F
-          echo "--- Recherche récursive du Makefile racine ---"
-          # On cherche un fichier qui contient 'VERSION =' (la signature du noyau)
-          find . -type f -name "Makefile" -exec grep -l "VERSION =" {} + 
+          git clone https://github.com/ReSukiSU/ReSukiSU KernelSU
+          sed -i '1i obj-y += KernelSU/' Makefile
+          
+          # Patch du scheduler
+          CORE_C=$(find kernel -name "core.c" | head -n 1)
+          sed -i '/#include <linux\/sched\/rt.h>/a #include "../KernelSU/kernel/ksu.h"' "$CORE_C"
+          sed -i '/context_switch(rq, prev, next);/i \    ksu_handle_trace_sched_switch(prev, next);' "$CORE_C"
 
       - name: Configure Kernel
         run: |
           cd source
-          export ARCH=arm64
-          export CROSS_COMPILE=aarch64-linux-gnu-
-          export CC=clang
-          export CLANG_TRIPLE=aarch64-linux-gnu-
-          export LD=ld.lld
-          
-          # Chargement de la config
+          # Application de la config
           make O=out ARCH=arm64 vendor/lito-perf_defconfig
           
-          # Activation de KSU
+          # Activation KSU et désactivation LTO
           echo "CONFIG_KSU=y" >> out/.config
-          
-          # Désactivation LTO (Source fréquente de bugs de linkage)
           sed -i 's/CONFIG_LTO_CLANG=y/# CONFIG_LTO_CLANG is not set/' out/.config
           echo "CONFIG_LTO_NONE=y" >> out/.config
           
+          # Finalisation config
           make O=out ARCH=arm64 olddefconfig
 
       - name: Compile Kernel
         run: |
           cd source
-          export ARCH=arm64
-          export CROSS_COMPILE=aarch64-linux-gnu-
-          export CC=clang
-          export CLANG_TRIPLE=aarch64-linux-gnu-
-          export LD=ld.lld
-          
-          make O=out ARCH=arm64 -j$(nproc) LLVM=1 LLVM_IAS=1 Image
+          make O=out ARCH=arm64 -j$(nproc) Image
