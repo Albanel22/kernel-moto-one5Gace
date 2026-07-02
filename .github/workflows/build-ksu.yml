@@ -15,21 +15,22 @@ jobs:
 
       - name: Setup Sources
         run: |
-          # Téléchargement des sources de Motorola
+          # 1. Téléchargement des sources
           git clone https://github.com/LineageOS/android_kernel_motorola_sm8250 --depth=1 -b lineage-23.2 source
-          
-          # Clonage des modules
           git clone https://github.com/ReSukiSU/ReSukiSU KSU
           git clone https://gitlab.com/simonpunk/susfs4ksu susfs
           
-          # Intégration KSU
+          # 2. Intégration KSU
           cp -r KSU/kernel source/drivers/kernelsu
           
-          # Intégration SUSFS
-          cp -r susfs/fs/* source/fs/
-          cp -r susfs/include/linux/* source/include/linux/
+          # 3. Intégration dynamique SUSFS
+          FS_DIR=$(find susfs -type d -name "fs" | head -n 1)
+          cp -r $FS_DIR/* source/fs/
           
-          # Patchs nécessaires
+          LINUX_DIR=$(find susfs -type d -name "linux" | grep "include" | head -n 1)
+          cp -r $LINUX_DIR/* source/include/linux/
+          
+          # 4. Patchs manuels
           cd source
           echo "obj-\$(CONFIG_KSU) += kernelsu/" >> drivers/Makefile
           sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" drivers/Kconfig
@@ -43,12 +44,12 @@ jobs:
           export CLANG_TRIPLE=aarch64-linux-gnu-
           
           mkdir -p out
-          # Utilisation de la configuration par défaut
+          # Configuration
           make O=out ARCH=arm64 kiev-perf_defconfig
           
-          # Injection de KSU/SUSFS dans la config
+          # Injection des options
           echo "CONFIG_KSU=y" >> out/.config
           echo "CONFIG_KSU_SUSFS=y" >> out/.config
           
-          # Lancement de la compilation
+          # Compilation
           make O=out ARCH=arm64 -j$(nproc)
