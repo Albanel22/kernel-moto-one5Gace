@@ -22,21 +22,21 @@ jobs:
 
       - name: Patch Kernel
         run: |
-          # Diagnostic : on regarde ce qu'il y a dans les dossiers clonés
-          echo "Contenu de susfs :"
-          ls -R ../susfs
-          
+          # 1. On va dans le dossier source pour patcher
           cd source
-          # Intégration KSU
-          cp -r ../KSU/kernel drivers/kernelsu
           
-          # Intégration SUSFS : on copie tout ce qui est dans le dossier susfs vers le noyau
-          # S'il y a des sous-dossiers, on les prend tous
-          cp -r ../susfs/* .
+          # 2. Intégration KSU (on utilise le chemin complet vers le workspace)
+          cp -r $GITHUB_WORKSPACE/KSU/kernel drivers/kernelsu
           
-          # Patchs nécessaires
+          # 3. Intégration SUSFS (on cherche où sont les fichiers)
+          # On copie tout le contenu du dossier susfs vers le dossier source
+          # Comme la structure est identique, cela va fusionner les fichiers
+          cp -r $GITHUB_WORKSPACE/susfs/* .
+          
+          # 4. Patchs nécessaires
           echo "obj-\$(CONFIG_KSU) += kernelsu/" >> drivers/Makefile
           sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" drivers/Kconfig
+
 
 
       - name: Compile Kernel
