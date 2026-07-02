@@ -1,4 +1,4 @@
-name: Build Kernel with KSU and SUSFS
+name: Build Kernel ReSukiSU
 
 on:
   workflow_dispatch:
@@ -7,30 +7,57 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Install Dependencies
-        run: |
-          sudo apt-get update && sudo apt-get install -y bc bison build-essential curl flex g++-aarch64-linux-gnu gcc-aarch64-linux-gnu git libssl-dev clang lld llvm zip
+      - name: Checkout Source
+        uses: actions/checkout@v4
+        with:
+          path: source
+          fetch-depth: 0
 
-      - name: Clone Sources
+      - name: Setup Environment
         run: |
-          git clone https://github.com/LineageOS/android_kernel_motorola_sm8250 --depth=1 -b lineage-23.2 source
-          git clone https://github.com/ReSukiSU/ReSukiSU KSU
-          git clone https://gitlab.com/simonpunk/susfs4ksu susfs
+          sudo apt-get update && sudo apt-get install -y clang lld llvm
+          mkdir -p source/out
 
-      - name: Patch Kernel
+      - name: Integrate ReSukiSU
         run: |
           cd source
-          # Intégration KSU
-          cp -r $GITHUB_WORKSPACE/KSU/kernel drivers/kernelsu
-          # Supprimer le fichier .git pour éviter l'erreur de sous-module
-          rm -rf drivers/kernelsu/.git
+          # Clone du fork ReSukiSU
+          git clone https://github.com/ReSukiSU/ReSukiSU KernelSU
           
-          # Intégration SUSFS
-          cp -r $GITHUB_WORKSPACE/susfs/* .
+          # 1. Patch du Makefile principal
+          # On ajoute KernelSU au début des objets pour qu'il soit traité par le build
+          sed -i '1i obj-y += KernelSU/' Makefile
           
-          # Patchs nécessaires
-          echo "obj-\$(CONFIG_KSU) += kernelsu/" >> drivers/Makefile
-          sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" drivers/Kconfig
+          # 2. Patch manuel du hook scheduler (Plus sécurisé)
+          # On cherche une ligne unique dans le fichier core.c pour injecter le include
+          # Si cette commande échoue, nous devrons adapter le pattern
+          sed -i '/#include <linux\/sched\/rt.h>/a #include "../KernelSU/kernel/ksu.h"' kernel/sched/core.c
+          
+          # On injecte le hook de trace à la fin de la fonction 'sched_fork' ou équivalent 
+          # Attention : C'est le point le plus critique. 
+          # On ajoute l'appel ksu_handle_trace_sched_switch après la définition de prev/next
+          sed -i '/context_switch(rq, prev, next);/i \    ksu_handle_trace_sched_switch(prev, next);' kernel/sched/core.c
+
+      - name: Configure Kernel
+        run: |
+          cd source
+          export ARCH=arm64
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export CC=clang
+          export CLANG_TRIPLE=aarch64-linux-gnu-
+          export LD=ld.lld
+          
+          # Chargement de la config
+          make O=out ARCH=arm64 vendor/lito-perf_defconfig
+          
+          # Activation de KSU
+          echo "CONFIG_KSU=y" >> out/.config
+          
+          # Désactivation LTO (Source fréquente de bugs de linkage)
+          sed -i 's/CONFIG_LTO_CLANG=y/# CONFIG_LTO_CLANG is not set/' out/.config
+          echo "CONFIG_LTO_NONE=y" >> out/.config
+          
+          make O=out ARCH=arm64 olddefconfig
 
       - name: Compile Kernel
         run: |
@@ -39,28 +66,6 @@ jobs:
           export CROSS_COMPILE=aarch64-linux-gnu-
           export CC=clang
           export CLANG_TRIPLE=aarch64-linux-gnu-
+          export LD=ld.lld
           
-          mkdir -p out
-          
-          # Configuration
-          make O=out ARCH=arm64 vendor/lito-perf_defconfig
-          
-          # Injection des options KSU/SUSFS
-          cat >> out/.config <<EOF
-          CONFIG_KSU=y
-          CONFIG_KSU_SUSFS=y
-          CONFIG_KSU_SUSFS_SUS_PATH=y
-          CONFIG_KSU_SUSFS_SUS_MOUNT=y
-          CONFIG_KSU_SUSFS_SUS_KSTAT=y
-          CONFIG_KSU_SUSFS_SPOOF_UNAME=y
-          CONFIG_KSU_SUSFS_ENABLE_LOG=y
-          CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
-          CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
-          EOF
-          
-          make O=out ARCH=arm64 olddefconfig
-          
-          # Compilation avec désactivation des erreurs de warning
-          # KBUILD_WERROR=0 désactive le mode strict
-          make O=out ARCH=arm64 -j$(nproc) KBUILD_WERROR=0
-
+          make O=out ARCH=arm64 -j$(nproc) LLVM=1 LLVM_IAS=1 Image
