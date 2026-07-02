@@ -20,8 +20,15 @@ jobs:
       - name: Patch Kernel
         run: |
           cd source
+          # Intégration KSU
           cp -r $GITHUB_WORKSPACE/KSU/kernel drivers/kernelsu
+          # Supprimer le fichier .git pour éviter l'erreur de sous-module
+          rm -rf drivers/kernelsu/.git
+          
+          # Intégration SUSFS
           cp -r $GITHUB_WORKSPACE/susfs/* .
+          
+          # Patchs nécessaires
           echo "obj-\$(CONFIG_KSU) += kernelsu/" >> drivers/Makefile
           sed -i "/endmenu/i\source \"drivers/kernelsu/Kconfig\"" drivers/Kconfig
 
@@ -35,12 +42,24 @@ jobs:
           
           mkdir -p out
           
-          # Utilisation de la configuration 'lito-perf' (base du Snapdragon 750G)
+          # Configuration standard
           make O=out ARCH=arm64 vendor/lito-perf_defconfig
           
-          # Injection des options KSU/SUSFS
-          echo "CONFIG_KSU=y" >> out/.config
-          echo "CONFIG_KSU_SUSFS=y" >> out/.config
+          # Activation forcée des options KSU et SUSFS dans le .config
+          cat >> out/.config <<EOF
+          CONFIG_KSU=y
+          CONFIG_KSU_SUSFS=y
+          CONFIG_KSU_SUSFS_SUS_PATH=y
+          CONFIG_KSU_SUSFS_SUS_MOUNT=y
+          CONFIG_KSU_SUSFS_SUS_KSTAT=y
+          CONFIG_KSU_SUSFS_SPOOF_UNAME=y
+          CONFIG_KSU_SUSFS_ENABLE_LOG=y
+          CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
+          CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
+          EOF
+          
+          # Finalisation de la configuration
+          make O=out ARCH=arm64 olddefconfig
           
           # Compilation
           make O=out ARCH=arm64 -j$(nproc)
